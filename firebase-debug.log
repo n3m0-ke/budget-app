@@ -1,0 +1,71 @@
+[debug] [2025-10-30T12:58:42.636Z] ----------------------------------------------------------------------
+[debug] [2025-10-30T12:58:42.641Z] Command:       /usr/local/bin/node /home/projects/stackblitz-starters-hojvxf7j/node_modules/.bin/firebase login
+[debug] [2025-10-30T12:58:42.642Z] CLI Version:   14.22.0
+[debug] [2025-10-30T12:58:42.642Z] Platform:      linux
+[debug] [2025-10-30T12:58:42.643Z] Node Version:  v20.19.1
+[debug] [2025-10-30T12:58:42.643Z] Time:          Thu Oct 30 2025 15:58:42 GMT+0300 (East Africa Time)
+[debug] [2025-10-30T12:58:42.644Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-30T12:58:42.650Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[info] i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[debug] [2025-10-30T12:58:43.978Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-10-30T12:58:43.978Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-10-30T12:58:57.892Z] HookError: [Inquirer] Hook functions can only be called from within a prompt
+    at new HookError (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/errors.js:22:1)
+    at getStore (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:42:15)
+    at Object.clearAll (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:111:23)
+    at eval (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/create-prompt.js:139:50)
+    at <anonymous> (https://stackblitzstartershojvxf7j-cnvh.w-credentialless-staticblitz.com/blitz.cf284e50.js:31:29344)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2025-10-30T12:59:06.717Z] ----------------------------------------------------------------------
+[debug] [2025-10-30T12:59:06.722Z] Command:       /usr/local/bin/node /home/projects/stackblitz-starters-hojvxf7j/node_modules/.bin/firebase login
+[debug] [2025-10-30T12:59:06.724Z] CLI Version:   14.22.0
+[debug] [2025-10-30T12:59:06.724Z] Platform:      linux
+[debug] [2025-10-30T12:59:06.724Z] Node Version:  v20.19.1
+[debug] [2025-10-30T12:59:06.725Z] Time:          Thu Oct 30 2025 15:59:06 GMT+0300 (East Africa Time)
+[debug] [2025-10-30T12:59:06.725Z] ----------------------------------------------------------------------
+[debug] 
+[info] i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[debug] [2025-10-30T12:59:08.268Z] HookError: [Inquirer] Hook functions can only be called from within a prompt
+    at new HookError (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/errors.js:22:1)
+    at getStore (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:42:15)
+    at Object.clearAll (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:111:23)
+    at eval (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/create-prompt.js:139:50)
+    at <anonymous> (https://stackblitzstartershojvxf7j-cnvh.w-credentialless-staticblitz.com/blitz.cf284e50.js:31:29344)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2025-10-30T13:05:58.378Z] ----------------------------------------------------------------------
+[debug] [2025-10-30T13:05:58.385Z] Command:       /usr/local/bin/node /home/projects/stackblitz-starters-hojvxf7j/node_modules/.bin/firebase login
+[debug] [2025-10-30T13:05:58.386Z] CLI Version:   14.22.0
+[debug] [2025-10-30T13:05:58.386Z] Platform:      linux
+[debug] [2025-10-30T13:05:58.387Z] Node Version:  v20.19.1
+[debug] [2025-10-30T13:05:58.387Z] Time:          Thu Oct 30 2025 16:05:58 GMT+0300 (East Africa Time)
+[debug] [2025-10-30T13:05:58.388Z] ----------------------------------------------------------------------
+[debug] 
+[info] i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[debug] [2025-10-30T13:06:30.740Z] HookError: [Inquirer] Hook functions can only be called from within a prompt
+    at new HookError (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/errors.js:22:1)
+    at getStore (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:42:15)
+    at Object.clearAll (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:111:23)
+    at eval (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/create-prompt.js:139:50)
+    at <anonymous> (https://stackblitzstartershojvxf7j-cnvh.w-credentialless-staticblitz.com/blitz.cf284e50.js:31:29344)
+[error] 
+[error] Error: An unexpected error has occurred.
+[debug] [2025-10-30T13:07:56.691Z] ----------------------------------------------------------------------
+[debug] [2025-10-30T13:07:56.694Z] Command:       /usr/local/bin/node /home/projects/stackblitz-starters-hojvxf7j/node_modules/.bin/firebase login
+[debug] [2025-10-30T13:07:56.695Z] CLI Version:   14.22.0
+[debug] [2025-10-30T13:07:56.695Z] Platform:      linux
+[debug] [2025-10-30T13:07:56.695Z] Node Version:  v20.19.1
+[debug] [2025-10-30T13:07:56.696Z] Time:          Thu Oct 30 2025 16:07:56 GMT+0300 (East Africa Time)
+[debug] [2025-10-30T13:07:56.696Z] ----------------------------------------------------------------------
+[debug] 
+[info] i  The Firebase CLI’s MCP server feature can optionally make use of Gemini in Firebase. Learn more about Gemini in Firebase and how it uses your data: https://firebase.google.com/docs/gemini-in-firebase#how-gemini-in-firebase-uses-your-data 
+[debug] [2025-10-30T13:07:57.350Z] HookError: [Inquirer] Hook functions can only be called from within a prompt
+    at new HookError (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/errors.js:22:1)
+    at getStore (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:42:15)
+    at Object.clearAll (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/hook-engine.js:111:23)
+    at eval (/home/projects/stackblitz-starters-hojvxf7j/node_modules/@inquirer/core/dist/commonjs/lib/create-prompt.js:139:50)
+    at <anonymous> (https://stackblitzstartershojvxf7j-cnvh.w-credentialless-staticblitz.com/blitz.cf284e50.js:31:29344)
+[error] 
+[error] Error: An unexpected error has occurred.
