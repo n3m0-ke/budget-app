@@ -17,6 +17,7 @@ import Cookies from 'js-cookie';
 interface CategoryBudget {
   name: string;
   amount: number;
+  notes:string;
 }
 
 interface Transaction {
@@ -73,6 +74,7 @@ export default function AnalysisPage() {
       const cats: CategoryBudget[] = (data.categories || []).map((c: any) => ({
         name: c.name,
         amount: Number(c.amount || 0),
+        notes: c.notes || '',
       }));
       setPlannedCategories(cats);
       setTotalBudgeted(Number(data.total || 0));
