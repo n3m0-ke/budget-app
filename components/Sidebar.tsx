@@ -1,13 +1,20 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  FiHome,
+  FiTrendingUp,
+  FiPieChart,
+  FiList,
+  FiCalendar,
+} from 'react-icons/fi';
 
 const links = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/budgets', label: '+ Monthly Budget' },
-  { href: '/transactions', label: 'Expenditures' },
-  { href: '/analysis', label: 'Analysis' },
-  { href: '/monthly-analysis', label: 'Monthly Overview' },
+  { href: '/', label: 'Dashboard', icon: <FiHome /> },
+  { href: '/budgets', label: '+ Monthly Budget', icon: <FiCalendar /> },
+  { href: '/transactions', label: 'Expenditures', icon: <FiList /> },
+  { href: '/analysis', label: 'Analysis', icon: <FiPieChart /> },
+  { href: '/monthly-analysis', label: 'Monthly Overview', icon: <FiTrendingUp /> },
 ];
 
 export default function Sidebar({
@@ -30,23 +37,26 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-screen w-60 bg-white shadow-md flex flex-col overflow-hidden transform transition-transform duration-300 z-20
+        className={`fixed top-0 left-0 h-screen w-60 bg-white/70 backdrop-blur-md shadow-lg flex flex-col overflow-hidden transform transition-transform duration-300 z-20
         ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div className="text-2xl font-semibold p-4 border-b">MyBudget</div>
+        <div className="text-2xl font-semibold p-4 border-b bg-white/50 backdrop-blur">
+          MyBudget
+        </div>
         <nav className="flex-1 overflow-y-auto">
           {links.map((link) => (
             <Link key={link.href} href={link.href}>
               <div
-                className={`px-4 py-3 cursor-pointer ${
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
                   pathname === link.href
                     ? 'bg-blue-100 font-medium text-blue-600'
                     : 'hover:bg-gray-100'
                 }`}
                 onClick={onClose}
               >
-                {link.label}
+                <span className="text-lg">{link.icon}</span>
+                <span>{link.label}</span>
               </div>
             </Link>
           ))}

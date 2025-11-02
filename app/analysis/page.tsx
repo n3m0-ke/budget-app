@@ -17,7 +17,7 @@ import Cookies from 'js-cookie';
 interface CategoryBudget {
   name: string;
   amount: number;
-  notes:string;
+  notes: string;
 }
 
 interface Transaction {
@@ -166,9 +166,9 @@ export default function AnalysisPage() {
       </h1>
 
       {/* Month Selector + Balance */}
-      <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3">
+      <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3 bg-white/40 backdrop-blur-md p-4 rounded-lg shadow-sm">
         <div className="flex items-center space-x-3">
-          <label className="font-medium text-gray-600">Select Month:</label>
+          <label className="font-medium text-gray-700">Select Month:</label>
           <input
             type="month"
             value={month}
@@ -177,16 +177,17 @@ export default function AnalysisPage() {
               setMonth(selected);
               loadData(selected);
             }}
-            className="border border-gray-300 rounded px-3 py-1"
+            className="border border-gray-300 rounded px-3 py-1 bg-white/60 backdrop-blur-sm"
           />
         </div>
-        <div className="text-gray-700 font-medium">
+        <div className="text-gray-800 font-medium">
           Balance:{' '}
           {month
             ? `${remainingBudget.toLocaleString()} / ${totalBudget.toLocaleString()} KES`
             : '--- / ---'}
         </div>
       </div>
+
 
       {loading && <p className="text-gray-500">Loading data...</p>}
 
@@ -318,20 +319,20 @@ export default function AnalysisPage() {
                     const actualColor = isLost
                       ? 'text-red-700'
                       : isRecovered
-                      ? 'text-green-700'
-                      : isSavings
-                      ? 'text-green-600'
-                      : actual > Number(c.amount)
-                      ? 'text-red-600'
-                      : 'text-gray-700';
+                        ? 'text-green-700'
+                        : isSavings
+                          ? 'text-green-600'
+                          : actual > Number(c.amount)
+                            ? 'text-red-600'
+                            : 'text-gray-700';
 
                     const balanceColor = isLost
                       ? 'text-red-700'
                       : isRecovered
-                      ? 'text-green-700'
-                      : balance < 0
-                      ? 'text-red-600'
-                      : 'text-green-600';
+                        ? 'text-green-700'
+                        : balance < 0
+                          ? 'text-red-600'
+                          : 'text-green-600';
 
                     return (
                       <tr
