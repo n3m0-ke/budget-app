@@ -29,12 +29,21 @@ function formatMonth(monthStr: string) {
   return date.toLocaleString('default', { month: 'long', year: 'numeric' });
 }
 
+function formatDate(dateStr: string) {
+  if(!dateStr) return '';
+
+
+  // const date = new Date(dateStr);
+  // return date.toLocaleDateString();
+}
+
 export default function TransactionsPage() {
   const { user } = useAuth();
   const [budgets, setBudgets] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [form, setForm] = useState({
     budgetMonth: '',
+    dateOfTransaction: '',
     category: '',
     amount: '',
     paidThrough: 'MPESA',
@@ -44,6 +53,7 @@ export default function TransactionsPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [loading, setLoading] = useState(false);
 
   // Load budget months
   useEffect(() => {
@@ -92,6 +102,7 @@ export default function TransactionsPage() {
   }, [user]);
 
   const addTransaction = async () => {
+    setLoading(true);
     if (!form.budgetMonth || !form.category || !form.amount) {
       alert('Please fill all required fields');
       return;
@@ -107,6 +118,7 @@ export default function TransactionsPage() {
       await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
       setForm({
         budgetMonth: '',
+        dateOfTransaction: '',
         category: '',
         amount: '',
         paidThrough: 'MPESA',
@@ -114,10 +126,12 @@ export default function TransactionsPage() {
       });
       setCategories([]);
       setMessage('Transaction added successfully 🎉');
+      setLoading(false);
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
       console.error(err);
       alert('Failed to add transaction');
+      setLoading(false);
     }
   };
 
@@ -126,13 +140,14 @@ export default function TransactionsPage() {
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('date', {
-        header: 'Date',
+      columnHelper.accessor('dateOfTransaction', {
+        header: 'Transaction Date',
         cell: (info) => {
           const value = info.getValue();
           if (!value) return '';
           const d = new Date(value);
-          return d.toLocaleString('default', {
+          return d.toLocaleString('en-GB', {
+            day: '2-digit',
             month: 'long',
             year: 'numeric',
           });
@@ -211,6 +226,14 @@ export default function TransactionsPage() {
           ))}
         </select>
 
+        <input
+              type="date"
+              className="border p-2 rounded flex-1"
+              value={form.dateOfTransaction || new Date().toISOString().split('T')[0]}
+              onChange={(e) => setForm({ ...form, dateOfTransaction: e.target.value })}
+              required
+            />
+
         {/* Category */}
         <select
           className="border p-2 rounded flex-1"
@@ -259,7 +282,30 @@ export default function TransactionsPage() {
           className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           onClick={addTransaction}
         >
-          Add
+          {loading && (
+            <svg
+              className="animate-spin h-5 w-5 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+              ></path>
+            </svg>
+
+          )}          
+          {loading ? 'Adding...' : 'Add'}
         </button>
       </div>
 

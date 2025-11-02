@@ -27,6 +27,14 @@ function formatMonth(monthStr: string) {
   return date.toLocaleString('default', { month: 'long', year: 'numeric' });
 }
 
+function formatDate(dateStr: string) {
+  if(!dateStr) return '';
+
+
+  // const date = new Date(dateStr);
+  // return date.toLocaleDateString();
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const router = useRouter();
@@ -36,6 +44,7 @@ export default function Dashboard() {
   const [categories, setCategories] = useState<string[]>([]);
   const [form, setForm] = useState({
     budgetMonth: '',
+    dateOfTransaction: '',
     category: '',
     amount: '',
     paidThrough: 'MPESA',
@@ -43,6 +52,9 @@ export default function Dashboard() {
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Redirect to login if not authenticated
 
   useEffect(() => {
     if (user === null) router.push('/login');
@@ -97,24 +109,57 @@ export default function Dashboard() {
       date: new Date().toISOString(),
     };
 
-    await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
+    setLoading(true);
 
-    setTransactions([tx, ...transactions]);
-    setForm({
-      budgetMonth: '',
-      category: '',
-      amount: '',
-      paidThrough: 'MPESA',
-      note: '',
-    });
-    setOpen(false);
-    setMessage('Transaction added successfully 🎉');
-    setTimeout(() => setMessage(null), 3000);
+    try {
+      await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
+
+      setTransactions([tx, ...transactions]);
+      setForm({
+        budgetMonth: '',
+        dateOfTransaction: '',
+        category: '',
+        amount: '',
+        paidThrough: 'MPESA',
+        note: '',
+      });
+      setOpen(false);
+      setMessage('Transaction added successfully 🎉');
+      setLoading(false);
+      setTimeout(() => setMessage(null), 3000);
+
+    } catch (error) {
+      console.error(error);
+      alert('Failed to add transaction');
+      setLoading(false);
+    }
+
+
   };
 
   if (!user)
     return (
       <div className="flex min-h-screen items-center justify-center text-gray-500">
+        <svg
+          className="animate-spin h-5 w-5 text-white"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          ></circle>
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+          ></path>
+        </svg>
         Redirecting to login...
       </div>
     );
@@ -218,6 +263,14 @@ export default function Dashboard() {
               ))}
             </select>
 
+            <input
+              type="date"
+              className="border p-2 rounded w-full"
+              value={form.dateOfTransaction || new Date().toISOString().split('T')[0]}
+              onChange={(e) => setForm({ ...form, dateOfTransaction: e.target.value })}
+              required
+            />
+
             <select
               className="border p-2 rounded w-full"
               value={form.category}
@@ -271,7 +324,29 @@ export default function Dashboard() {
               Cancel
             </Button>
             <Button color="blue" onClick={addTransaction} className="px-4">
-              Add Transaction
+              {loading && (
+                <svg
+                  className="animate-spin h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+              )}
+              {loading ? 'Adding Transaction Details' : 'Add Transaction'}
             </Button>
           </div>
         </DialogFooter>
