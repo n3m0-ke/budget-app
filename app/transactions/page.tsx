@@ -18,6 +18,8 @@ import {
   getSortedRowModel,
   getPaginationRowModel,
   getFilteredRowModel,
+  type SortingState,
+  type ColumnFiltersState,
 } from '@tanstack/react-table';
 
 function formatMonth(monthStr: string) {
@@ -40,8 +42,8 @@ export default function TransactionsPage() {
   });
   const [transactions, setTransactions] = useState<any[]>([]);
   const [message, setMessage] = useState<string | null>(null);
-  const [sorting, setSorting] = useState([]);
-  const [columnFilters, setColumnFilters] = useState([]);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
   // Load budget months
   useEffect(() => {
