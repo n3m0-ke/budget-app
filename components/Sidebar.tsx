@@ -8,6 +8,7 @@ import {
   FiList,
   FiCalendar,
 } from 'react-icons/fi';
+import Logo from './Logo';
 
 const links = [
   { href: '/', label: 'Dashboard', icon: <FiHome /> },
@@ -37,12 +38,12 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed top-0 left-0 h-screen w-60 bg-white/70 backdrop-blur-md shadow-lg flex flex-col overflow-hidden transform transition-transform duration-300 z-20
+        className={`fixed top-0 left-0 h-screen w-60 bg-black/40 backdrop-blur-md shadow-lg flex flex-col overflow-hidden transform transition-transform duration-300 z-20
         ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div className="text-2xl font-semibold p-4 border-b bg-white/50 backdrop-blur">
-          MyBudget
+        <div className="text-2xl font-semibold p-4 border-b bg-black/20 backdrop-blur">
+          <Logo />
         </div>
         <nav className="flex-1 overflow-y-auto">
           {links.map((link) => (

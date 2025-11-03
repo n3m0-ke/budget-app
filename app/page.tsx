@@ -139,7 +139,7 @@ export default function Dashboard() {
 
   if (!user)
     return (
-      <div className="flex min-h-screen items-center justify-center text-gray-500">
+      <div className="flex min-h-screen items-center justify-center text-gray-500 bg-transparent">
         <svg
           className="animate-spin h-5 w-5 text-white"
           xmlns="http://www.w3.org/2000/svg"
@@ -165,7 +165,7 @@ export default function Dashboard() {
     );
 
   return (
-    <div className="flex flex-col space-y-6">
+    <div className="flex flex-col space-y-6 bg-transparent">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-semibold text-blue-700 mb-2">
           Welcome back
