@@ -166,8 +166,8 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col space-y-6 bg-transparent">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-semibold text-blue-700 mb-2">
+      <div className="flex justify-between items-center ">
+        <h1 className="text-3xl font-semibold text-blue-300 mb-2">
           Welcome back
         </h1>
 
@@ -189,11 +189,11 @@ export default function Dashboard() {
       {/* Existing Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {/* Budget Summary Card */}
-        <div className="p-6 bg-white rounded-lg shadow">
-          <h2 className="font-semibold text-lg mb-2 text-gray-700">
+        <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
+          <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Planned Budget
           </h2>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-100 mb-4">
             Set and review your monthly budgets per category.
           </p>
           <button
@@ -205,11 +205,11 @@ export default function Dashboard() {
         </div>
 
         {/* Expenditure Card */}
-        <div className="p-6 bg-white rounded-lg shadow">
-          <h2 className="font-semibold text-lg mb-2 text-gray-700">
+        <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
+          <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Expenditures
           </h2>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-100 mb-4">
             Track your daily spending by category and payment method.
           </p>
           <button
@@ -221,11 +221,11 @@ export default function Dashboard() {
         </div>
 
         {/* Analysis Card */}
-        <div className="p-6 bg-white rounded-lg shadow">
-          <h2 className="font-semibold text-lg mb-2 text-gray-700">
+        <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
+          <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Monthly Analysis
           </h2>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-100 mb-4">
             Compare budgeted amounts with actual expenditures.
           </p>
           <button

@@ -203,7 +203,7 @@ export default function TransactionsPage() {
 
   return (
     <div className="flex flex-col space-y-6">
-      <h2 className="text-2xl font-semibold">Add Expenditure</h2>
+      <h2 className="text-2xl font-semibold text-blue-300">Add Expenditure</h2>
 
       {message && (
         <div className="bg-green-100 text-green-700 px-4 py-2 rounded">
@@ -211,7 +211,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="bg-white p-4 rounded shadow mb-6 flex flex-col md:flex-row gap-3">
+      <div className="bg-white/20 backdrop-blur p-4 rounded shadow mb-6 flex flex-col md:flex-row gap-3">
         {/* Budget Month */}
         <select
           className="border p-2 rounded flex-1"
@@ -310,9 +310,9 @@ export default function TransactionsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto bg-white rounded shadow p-4">
+      <div className="overflow-x-auto bg-black/40 backdrop-blur-sm rounded shadow p-4">
         <table className="min-w-full">
-          <thead className="bg-gray-100 text-gray-700">
+          <thead className="bg-gray/30 backdrop-blur-sm text-blue-300">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -339,7 +339,7 @@ export default function TransactionsPage() {
                           header.column.setFilterValue(e.target.value)
                         }
                         placeholder="Filter..."
-                        className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                        className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
                       />
                     )}
                   </th>
@@ -349,7 +349,7 @@ export default function TransactionsPage() {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => (
-              <tr key={row.id} className="border-b">
+              <tr key={row.id} className="border-b bg-black/80 backdrop-blur text-blue-100">
                 {row.getVisibleCells().map((cell) => (
                   <td key={cell.id} className="p-2">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}

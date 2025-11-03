@@ -18,7 +18,7 @@ export default function LayoutControllerClient({
   return (
     <AuthProvider>
       {isAuthPage ? (
-        <main className="flex items-center justify-center min-h-screen w-full">
+        <main className="flex items-center justify-center min-h-screen w-full bg-transparent">
           {children}
         </main>
       ) : (
@@ -27,7 +27,7 @@ export default function LayoutControllerClient({
 
           <div className="flex-1 flex flex-col md:ml-60">
             <Topbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
-            <main className="flex-1 bg-gray-50 p-4 overflow-y-auto">
+            <main className="flex-1 bg-gray-50 p-4 overflow-y-auto bg-transparent">
               {children}
             </main>
           </div>

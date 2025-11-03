@@ -42,27 +42,27 @@ export default function Sidebar({
         ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        <div className="text-2xl font-semibold p-4 border-b bg-black/20 backdrop-blur">
+        <div className="text-2xl font-semibold p-3 border-none bg-black/20 backdrop-blur">
           <Logo />
         </div>
         <nav className="flex-1 overflow-y-auto">
           {links.map((link) => (
             <Link key={link.href} href={link.href}>
               <div
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors  ${
                   pathname === link.href
-                    ? 'bg-blue-100 font-medium text-blue-600'
-                    : 'hover:bg-gray-100'
+                    ? 'bg-blue/20 backdrop-blur font-medium text-blue-400'
+                    : 'hover:bg-blue/30 hover:backdrop-blur text-blue-200 hover:text-blue-300'
                 }`}
                 onClick={onClose}
               >
-                <span className="text-lg">{link.icon}</span>
+                <span className="text-xl">{link.icon}</span>
                 <span>{link.label}</span>
               </div>
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t text-sm text-gray-500">v1.0</div>
+        <div className="p-4 border-t text-sm text-gray-200">v1.0</div>
       </aside>
     </>
   );

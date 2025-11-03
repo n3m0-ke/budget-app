@@ -110,16 +110,16 @@ export default function BudgetPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 md:p-8">
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow p-4 sm:p-6 md:p-8">
-        <h1 className="text-2xl font-semibold mb-4 text-center">
+    <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">
+      <div className="max-w-3xl mx-auto border bg-black/80 backdrop-blur-m rounded-xl shadow p-4 sm:p-6 md:p-8">
+        <h1 className="text-2xl font-semibold mb-4 text-center text-blue-200">
           Add a Budget
         </h1>
 
         {/* Month Selector */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
           <div className="flex flex-col">
-            <label className="font-medium text-gray-700 mb-1">
+            <label className="font-medium text-gray-200 mb-1">
               Select Month:
             </label>
             <input
@@ -132,7 +132,7 @@ export default function BudgetPage() {
 
           {/* Total Debited */}
           <div className="flex flex-col">
-            <label className="font-medium text-gray-700 mb-1">
+            <label className="font-medium text-gray-200 mb-1">
               Total Debited:
             </label>
             <input
@@ -159,16 +159,16 @@ export default function BudgetPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm mb-4">
                 <thead>
-                  <tr className="bg-gray-100">
-                    <th className="text-left p-2">Category</th>
-                    <th className="text-left p-2">Amount (KES)</th>
-                    <th className="text-left p-2">Notes</th>
+                  <tr className="bg-gray-100/20 backdrop-blur-sm">
+                    <th className="text-left p-2 text-blue-300">Category</th>
+                    <th className="text-left p-2 text-blue-300">Amount (KES)</th>
+                    <th className="text-left p-2 text-blue-300">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categories.map((cat, index) => (
                     <tr key={index} className="border-b">
-                      <td className="p-2">{cat.name}</td>
+                      <td className="p-2 text-cyan-200">{cat.name}</td>
                       <td className="p-2">
                         <input
                           type="number"

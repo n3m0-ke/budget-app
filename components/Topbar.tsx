@@ -23,7 +23,7 @@ export default function Topbar({
   };
 
   return (
-    <header className="h-14 bg-white/70 backdrop-blur-md border-b flex items-center justify-between px-4 sticky top-0 z-20">
+    <header className="h-14 bg-black/40 backdrop-blur-md border-b flex items-center justify-between px-4 sticky top-0 z-20">
       {/* Left: Sidebar toggle */}
       <div className="flex items-center space-x-2">
         <button
@@ -32,16 +32,16 @@ export default function Topbar({
         >
           <FiMenu className="w-6 h-6" />
         </button>
-        <h1 className="text-lg font-medium">Budget Tracker</h1>
+        <h1 className="text-xl font-medium text-blue-200">Budget Tracker</h1>
       </div>
 
       {/* Right: User dropdown */}
       <div className="relative">
         <button
           onClick={() => setOpen(!open)}
-          className="flex items-center space-x-2 p-2 rounded hover:bg-gray-100"
+          className="flex items-center space-x-2 p-2 rounded hover:bg-white/30 hover:backdrop-blur"
         >
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-blue-200">
             {truncateEmail(user?.email)}
           </span>
           <FiChevronDown
