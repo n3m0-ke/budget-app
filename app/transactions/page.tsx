@@ -30,11 +30,9 @@ function formatMonth(monthStr: string) {
 }
 
 function formatDate(dateStr: string) {
-  if(!dateStr) return '';
-
-
-  // const date = new Date(dateStr);
-  // return date.toLocaleDateString();
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString();
 }
 
 export default function TransactionsPage() {
@@ -43,7 +41,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [form, setForm] = useState({
     budgetMonth: '',
-    dateOfTransaction: '',
+    dateOfTransaction: new Date().toISOString().split('T')[0],
     category: '',
     amount: '',
     paidThrough: 'MPESA',
@@ -103,8 +101,9 @@ export default function TransactionsPage() {
 
   const addTransaction = async () => {
     setLoading(true);
-    if (!form.budgetMonth || !form.category || !form.amount) {
-      alert('Please fill all required fields');
+    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction) {
+      alert('Please fill all of budget month, category, amount, and date of transaction fields.');
+      setLoading(false);
       return;
     }
     if (!user) return;
@@ -152,23 +151,41 @@ export default function TransactionsPage() {
             year: 'numeric',
           });
         },
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue) return true;
+          const rowDate = new Date(row.getValue(columnId)).toISOString().split('T')[0];
+          return rowDate === filterValue;
+        },
       }),
+
       columnHelper.accessor('budgetMonth', {
         header: 'Budget Month',
         cell: (info) => formatMonth(info.getValue()),
       }),
+
       columnHelper.accessor('category', {
         header: 'Category',
         cell: (info) => info.getValue(),
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue || filterValue.length === 0) return true;
+          return filterValue.includes(row.getValue(columnId));
+        },
       }),
+
       columnHelper.accessor('amount', {
         header: 'Amount',
         cell: (info) => Number(info.getValue()).toLocaleString(),
       }),
+
       columnHelper.accessor('paidThrough', {
         header: 'Paid Through',
         cell: (info) => info.getValue(),
+        filterFn: (row, columnId, filterValue) => {
+          if (!filterValue || filterValue.length === 0) return true;
+          return filterValue.includes(row.getValue(columnId));
+        },
       }),
+
       columnHelper.accessor('note', {
         header: 'Note',
         cell: (info) => info.getValue(),
@@ -176,6 +193,7 @@ export default function TransactionsPage() {
     ],
     [columnHelper]
   );
+
 
   const filteredTransactions = useMemo(() => {
     if (!form.budgetMonth) return transactions;
@@ -192,6 +210,7 @@ export default function TransactionsPage() {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 10 } },
   });
 
   if (!user)
@@ -226,14 +245,6 @@ export default function TransactionsPage() {
           ))}
         </select>
 
-        <input
-              type="date"
-              className="border p-2 rounded flex-1"
-              value={form.dateOfTransaction || new Date().toISOString().split('T')[0]}
-              onChange={(e) => setForm({ ...form, dateOfTransaction: e.target.value })}
-              required
-            />
-
         {/* Category */}
         <select
           className="border p-2 rounded flex-1"
@@ -248,6 +259,16 @@ export default function TransactionsPage() {
             </option>
           ))}
         </select>
+
+        <input
+          type="date"
+          className="border p-2 rounded flex-1"
+          value={form.dateOfTransaction}
+          onChange={(e) => setForm({ ...form, dateOfTransaction: e.target.value })}
+          required
+        />
+
+
 
         {/* Amount */}
         <input
@@ -278,8 +299,11 @@ export default function TransactionsPage() {
           onChange={(e) => setForm({ ...form, note: e.target.value })}
         />
 
+        <br />
+
         <button
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          className={`flex items-center justify-center gap-2 bg-blue-500 text-white px-2 rounded transition-colors duration-200 ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-600'
+            }`}
           onClick={addTransaction}
         >
           {loading && (
@@ -304,7 +328,7 @@ export default function TransactionsPage() {
               ></path>
             </svg>
 
-          )}          
+          )}
           {loading ? 'Adding...' : 'Add'}
         </button>
       </div>
@@ -332,16 +356,67 @@ export default function TransactionsPage() {
                     </div>
 
                     {/* Column Filter */}
+                    {/* Column Filter */}
                     {header.column.getCanFilter() && (
-                      <input
-                        value={(header.column.getFilterValue() ?? '') as string}
-                        onChange={(e) =>
-                          header.column.setFilterValue(e.target.value)
-                        }
-                        placeholder="Filter..."
-                        className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
-                      />
+                      <>
+                        {header.column.id === 'category' && (
+                          <select
+                            multiple
+                            onChange={(e) => {
+                              const values = Array.from(e.target.selectedOptions, (opt) => opt.value);
+                              header.column.setFilterValue(values);
+                            }}
+                            className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
+                          >
+                            <option value="Fare/Transport">Fare/Transport</option>
+                            <option value="Essentials + Grooming (recurring)">Essentials + Grooming (recurring)</option>
+                            <option value="Household">Household</option>
+                            <option value="Debt Repayment">Debt Repayment</option>
+                            <option value="Parents Support">Parents Support</option>
+                            <option value="Grooming (non-recurring)">Grooming (non-recurring)</option>
+                            <option value="Miscellaneous">Miscellaneous</option>
+                            <option value="Savings">Savings</option>
+                            <option value="Investment">Investment</option>
+                            <option value="Money Lost">Money Lost</option>
+                            <option value="Money Recovered">Money Recovered</option>
+                          </select>
+                        )}
+
+                        {header.column.id === 'paidThrough' && (
+                          <select
+                            multiple
+                            onChange={(e) => {
+                              const values = Array.from(e.target.selectedOptions, (opt) => opt.value);
+                              header.column.setFilterValue(values);
+                            }}
+                            className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
+                          >
+                            <option>MPESA</option>
+                            <option>Cash</option>
+                            <option>Bank Transfer</option>
+                          </select>
+                        )}
+
+                        {header.column.id === 'dateOfTransaction' && (
+                          <input
+                            type="date"
+                            onChange={(e) => header.column.setFilterValue(e.target.value)}
+                            className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
+                          />
+                        )}
+
+                        {/* Default text input for others */}
+                        {['note', 'budgetMonth', 'amount'].includes(header.column.id) && (
+                          <input
+                            value={(header.column.getFilterValue() ?? '') as string}
+                            onChange={(e) => header.column.setFilterValue(e.target.value)}
+                            placeholder="Filter..."
+                            className="mt-1 border border-gray-300 rounded px-2 py-1 text-sm w-full text-gray-700"
+                          />
+                        )}
+                      </>
                     )}
+
                   </th>
                 ))}
               </tr>
@@ -359,6 +434,29 @@ export default function TransactionsPage() {
             ))}
           </tbody>
         </table>
+        <div className="flex items-center justify-between mt-3 text-blue-200 text-sm">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className="px-3 py-1 bg-gray-800 rounded disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className="px-3 py-1 bg-gray-800 rounded disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+
+          <div>
+            Page <strong>{table.getState().pagination.pageIndex + 1}</strong> of{' '}
+            {table.getPageCount()}
+          </div>
+        </div>
       </div>
     </div>
   );
