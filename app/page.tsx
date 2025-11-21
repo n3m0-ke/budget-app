@@ -20,6 +20,12 @@ import {
   orderBy,
 } from 'firebase/firestore';
 
+import DailySpendLineChart from '@/components/charts/DailySpendLineChart';
+import BudgetSummaryDonut from "@/components/charts/BudgetSummaryDonut";
+import PaymentMethodBreakdownPie from "@/components/charts/PaymentMethodBreakdownPie";
+import CategorySpendingBar from "@/components/charts/CategorySpendingBar";
+import TopCategoriesSummary from "@/components/charts/TopCategoriesSummary";
+
 function formatMonth(monthStr: string) {
   if (!monthStr) return '';
   const [year, month] = monthStr.split('-');

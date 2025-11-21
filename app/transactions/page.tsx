@@ -230,7 +230,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="bg-white/20 backdrop-blur p-4 rounded shadow mb-6 flex flex-col md:flex-row gap-3">
+      <div className="overflow-x-auto max-w-full bg-white/20 backdrop-blur p-4 rounded shadow mb-6 flex flex-col md:flex-row gap-3">
         {/* Budget Month */}
         <select
           className="border p-2 rounded flex-1"
@@ -334,8 +334,8 @@ export default function TransactionsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto bg-black/40 backdrop-blur-sm rounded shadow p-4">
-        <table className="min-w-full">
+      <div className="overflow-x-auto max-w-full bg-black/40 backdrop-blur-sm rounded shadow p-4">
+        <table className="table-auto w-full">
           <thead className="bg-gray/30 backdrop-blur-sm text-blue-300">
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
