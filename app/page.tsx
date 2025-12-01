@@ -20,11 +20,9 @@ import {
   orderBy,
 } from 'firebase/firestore';
 
+import { getDailySpendData } from '@/lib/charts/getDailySpendData';
 import DailySpendLineChart from '@/components/charts/DailySpendLineChart';
-import BudgetSummaryDonut from "@/components/charts/BudgetSummaryDonut";
-import PaymentMethodBreakdownPie from "@/components/charts/PaymentMethodBreakdownPie";
-import CategorySpendingBar from "@/components/charts/CategorySpendingBar";
-import TopCategoriesSummary from "@/components/charts/TopCategoriesSummary";
+
 
 function formatMonth(monthStr: string) {
   if (!monthStr) return '';
@@ -177,13 +175,12 @@ export default function Dashboard() {
           Welcome back
         </h1>
 
-        <Button
+        {/* <Button
           color="blue"
           onClick={handleOpen}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"       >
           + Add Transaction
-        </Button>
+        </Button> */}
       </div>
 
       {message && (
@@ -243,8 +240,10 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <DailySpendLineChart />
+
       {/* Transaction Modal */}
-      <Dialog
+      {/* <Dialog
         open={open}
         handler={handleOpen}
         size="sm"
@@ -356,7 +355,7 @@ export default function Dashboard() {
             </Button>
           </div>
         </DialogFooter>
-      </Dialog>
+      </Dialog> */}
     </div>
   );
 }

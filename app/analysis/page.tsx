@@ -209,22 +209,48 @@ export default function AnalysisPage() {
           />
         </div>
 
-        {/* Action Button / Status */}
+        {/* Action Menu */}
         <div>
-          {month ? (
+          {month && (
             closed ? (
               <span className="px-4 py-1.5 rounded-md bg-gray-200 text-gray-600 text-sm font-medium shadow-sm">
                 Budget Closed
               </span>
             ) : (
-              <button
-                onClick={() => closeBudget(month)}
-                className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm focus:ring-2 focus:ring-red-300"
-              >
-                Close Budget
-              </button>
+              <div className="relative inline-block text-left">
+                <details className="group">
+                  <summary className="list-none cursor-pointer px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-sm rounded-md flex items-center gap-1 shadow-sm">
+                    Actions
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                    </svg>
+                  </summary>
+
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
+
+                    {/* Close Budget */}
+                    <button
+                      onClick={() => closeBudget(month)}
+                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Close Budget
+                    </button>
+
+                    <div className="border-t border-gray-200 my-1" />
+
+                    {/* Download PDF */}
+                    <button
+                      onClick={() => alert('PDF download feature coming soon!')}
+                      className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                    >
+                      Download Analysis
+                    </button>
+
+                  </div>
+                </details>
+              </div>
             )
-          ) : null}
+          )}
         </div>
 
         {/* Balance */}
@@ -247,6 +273,7 @@ export default function AnalysisPage() {
         </div>
 
       </div>
+
 
 
 
