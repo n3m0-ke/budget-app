@@ -1,4 +1,14 @@
+"use client";
 
+import { useEffect, useState } from "react";
+import { getDailySpendData } from "@/lib/charts/getDailySpendData";
+import { useAuth } from "@/lib/useAuth";
+import { PieChart,
+Pie,
+Cell,
+Tooltip,
+Legend,
+ResponsiveContainer } from "recharts";
 
 // export default function BudgetSummaryDonut({ data }) {
 //     return (

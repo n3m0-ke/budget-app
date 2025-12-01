@@ -22,9 +22,7 @@ export default function DailySpendLineChart() {
 
         async function load() {
             const result = await getDailySpendData(user.uid);
-            console.log(result);
             setData(result);
-            console.log(data);
         }
 
         load();
@@ -36,7 +34,7 @@ export default function DailySpendLineChart() {
     }, [data]);
 
     return (
-        <div className="w-full bg-black/80 backdrop-blur-m shadow-sm rounded-xl p-6">
+        <div className="border border-grey-200 w-full bg-black/80 backdrop-blur-m shadow-sm rounded-xl p-6">
             <h2 className="text-lg font-semibold text-blue-300 mb-4">
                 Daily Spending Overview
             </h2>

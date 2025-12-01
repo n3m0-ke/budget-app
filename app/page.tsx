@@ -22,6 +22,8 @@ import {
 
 import { getDailySpendData } from '@/lib/charts/getDailySpendData';
 import DailySpendLineChart from '@/components/charts/DailySpendLineChart';
+import { getPaymentMethodData } from '@/lib/charts/getPaymentMethodData';
+import PaymentMethodBreakdownPie from '@/components/charts/PaymentMethodBreakdownPie';
 
 
 function formatMonth(monthStr: string) {
@@ -167,6 +169,9 @@ export default function Dashboard() {
         Redirecting to login...
       </div>
     );
+  
+  
+  console.log("payment method data", getPaymentMethodData(user.uid));
 
   return (
     <div className="flex flex-col space-y-6 bg-transparent">
@@ -241,6 +246,10 @@ export default function Dashboard() {
       </div>
 
       <DailySpendLineChart />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <PaymentMethodBreakdownPie />
+      </div>
 
       {/* Transaction Modal */}
       {/* <Dialog
