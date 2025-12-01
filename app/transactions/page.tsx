@@ -6,6 +6,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
   getDocs,
   addDoc,
 } from 'firebase/firestore';
@@ -58,10 +59,13 @@ export default function TransactionsPage() {
     if (!user) return;
     const loadBudgets = async () => {
       const budgetsCol = collection(db, 'users', user.uid, 'budgets');
-      const q = query(budgetsCol, orderBy('total', 'desc'));
-      const snapshot = await getDocs(q);
-      const months: string[] = [];
-      snapshot.forEach((doc) => months.push(doc.id));
+      const snapshot = await getDocs(budgetsCol);
+
+      //Filter our closed budgets
+      const months: string[] = snapshot.docs
+      .filter(d => !d.data().closed)
+      .map(d => d.id)
+      .sort();
       setBudgets(months);
     };
     loadBudgets();
@@ -101,11 +105,18 @@ export default function TransactionsPage() {
 
   const addTransaction = async () => {
     setLoading(true);
-    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction) {
+    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction ) {
       alert('Please fill all of budget month, category, amount, and date of transaction fields.');
       setLoading(false);
       return;
     }
+
+    if ((!budgets.includes(form.budgetMonth))){
+      alert("You cannot assign a transaction to a closed budget.");
+      setLoading(false);
+      return;
+    }
+    
     if (!user) return;
 
     const tx = {

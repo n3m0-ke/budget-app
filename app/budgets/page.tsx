@@ -103,6 +103,7 @@ export default function BudgetPage() {
       categories,
       total: Number(total),
       totalDebited: Number(totalDebited),
+      closed: false
     });
 
     alert('Budget saved!');

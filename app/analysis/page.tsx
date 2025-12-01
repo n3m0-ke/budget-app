@@ -10,6 +10,7 @@ import {
   getDocs,
   query,
   where,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Cookies from 'js-cookie';
@@ -29,6 +30,13 @@ interface Transaction {
   paidThrough?: string;
 }
 
+function formatMonth(monthStr: string) {
+  if (!monthStr) return '';
+  const [year, month] = monthStr.split('-');
+  const date = new Date(Number(year), Number(month) - 1);
+  return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+}
+
 export default function AnalysisPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -41,6 +49,7 @@ export default function AnalysisPage() {
   const [totalBudgeted, setTotalBudgeted] = useState<number>(0);
   const [amountDebited, setAmountDebited] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [closed, setClosed] = useState(false);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -70,6 +79,7 @@ export default function AnalysisPage() {
 
     if (budgetSnap.exists()) {
       const data: any = budgetSnap.data();
+      setClosed(data.closed);
       // Normalize categories: ensure amounts are numbers
       const cats: CategoryBudget[] = (data.categories || []).map((c: any) => ({
         name: c.name,
@@ -159,6 +169,22 @@ export default function AnalysisPage() {
     balanceColor = 'text-orange-500';
   }
 
+  async function closeBudget(month: string) {
+    if (!user) return;
+
+    const confirmSave = confirm(
+      `Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`
+    );
+    if (!confirmSave) return;
+
+    const ref = doc(db, "users", user.uid, "budgets", month);
+    await updateDoc(ref, { closed: true });
+
+    alert("Budget closed successfully.");
+
+    setClosed(true);
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-6">
       <h1 className="text-2xl font-semibold mb-6 text-blue-300">
@@ -166,8 +192,10 @@ export default function AnalysisPage() {
       </h1>
 
       {/* Month Selector + Balance */}
-      <div className="w-full flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-3 bg-white/40 backdrop-blur-md p-4 rounded-lg shadow-sm">
-        <div className="flex items-center space-x-3">
+      <div className="w-full bg-white/60 backdrop-blur-xl rounded-xl shadow-sm mb-6 p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+        {/* Month Selector */}
+        <div className="flex items-center gap-3">
           <label className="font-medium text-gray-700">Select Month:</label>
           <input
             type="month"
@@ -177,25 +205,49 @@ export default function AnalysisPage() {
               setMonth(selected);
               loadData(selected);
             }}
-            className="border border-gray-300 rounded px-3 py-1 bg-white/60 backdrop-blur-sm"
+            className="border border-gray-300 rounded-md px-3 py-1 bg-white shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
           />
         </div>
-        <div className="text-gray-800 font-medium">
-          Balance:{' '}
-          {month ? (
-            <span className="flex items-center gap-2">
-              {`${remainingBudget.toLocaleString()} / ${totalBudget.toLocaleString()} KES`}
-              <span className="relative flex size-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
-                <span className="relative inline-flex size-3 rounded-full bg-sky-500"></span>
-              </span>
-            </span>
-          ) : (
-            '--- / ---'
-          )}
 
+        {/* Action Button / Status */}
+        <div>
+          {month ? (
+            closed ? (
+              <span className="px-4 py-1.5 rounded-md bg-gray-200 text-gray-600 text-sm font-medium shadow-sm">
+                Budget Closed
+              </span>
+            ) : (
+              <button
+                onClick={() => closeBudget(month)}
+                className="px-4 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm focus:ring-2 focus:ring-red-300"
+              >
+                Close Budget
+              </button>
+            )
+          ) : null}
         </div>
+
+        {/* Balance */}
+        <div className="flex flex-col text-right">
+          <span className="text-gray-500 text-sm">Remaining Balance</span>
+
+          <div className="flex items-center gap-2 text-gray-800 font-semibold text-lg">
+            {month ? (
+              <>
+                {remainingBudget.toLocaleString()} / {totalBudget.toLocaleString()} KES
+                <span className="relative flex size-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                  <span className="relative inline-flex size-3 rounded-full bg-sky-500"></span>
+                </span>
+              </>
+            ) : (
+              "--- / ---"
+            )}
+          </div>
+        </div>
+
       </div>
+
 
 
       {loading && <p className="text-gray-500">Loading data...</p>}
