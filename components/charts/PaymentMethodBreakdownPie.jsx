@@ -46,7 +46,7 @@ const COLORS = {
   };
   
 
-export default function PaymentMethodBreakdownPie() {
+export default function PaymentMethodBreakdownPie({minimal = false}) {
     const { user } = useAuth();
     const [data, setData] = useState([]);
 
@@ -64,19 +64,21 @@ export default function PaymentMethodBreakdownPie() {
     }, [user]);
 
     return (
-        <div className="border border-grey-200 p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
-            <h2 className="text-lg font-semibold text-blue-300 mb-4">
-                Payment Method Breakdown
-            </h2>
+        <div className="border border-grey-200 p-2 border bg-black/80 backdrop-blur-m rounded-lg shadow">
+            {!minimal && (
+                <h2 className="text-lg font-semibold text-blue-300 mb-4">
+                    Payment Method Breakdown
+                </h2>
+            )}
 
-            <div className="w-full h-72">
-                <ResponsiveContainer width="100%" height="100%">
+            <div className="w-full h-72 p-auto">
+                <ResponsiveContainer width={minimal ? 250 : 350} height={minimal ? 250 : 300}>
                     <PieChart width={350} height={300}>
                         <Pie
-                            data={data}
+                            data={data}                            
                             dataKey="value"
                             nameKey="name"
-                            outerRadius={100}
+                            outerRadius={minimal ? 80 : 100}
                             label={renderCustomizedLabel}
                             labelLine={false}   // <-- removes the lines!!!!
                             >

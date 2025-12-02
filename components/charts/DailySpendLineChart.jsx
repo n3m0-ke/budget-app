@@ -29,7 +29,7 @@ export default function DailySpendLineChart() {
     }, [user]);
 
     return (
-        <div className="border border-grey-200 w-full bg-black/80 backdrop-blur-m shadow-sm rounded-xl p-6">
+        <div className="border border-grey-200 w-full bg-black/80 backdrop-blur-md shadow-sm rounded-xl p-6">
             <h2 className="text-lg font-semibold text-blue-300 mb-4">
                 Daily Spending Overview
             </h2>

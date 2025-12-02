@@ -22,6 +22,8 @@ import {
 
 import DailySpendLineChart from '@/components/charts/DailySpendLineChart';
 import PaymentMethodBreakdownPie from '@/components/charts/PaymentMethodBreakdownPie';
+import CategorySpendingBar from '@/components/charts/CategorySpendingBar';
+import QuickAnimatedLinks from '@/components/home/QuickAnimatedLinks';
 import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 
 
@@ -131,8 +133,6 @@ export default function Dashboard() {
       alert('Failed to add transaction');
       setLoading(false);
     }
-
-
   };
 
   if (!user)
@@ -235,9 +235,15 @@ export default function Dashboard() {
 
       <DailySpendLineChart />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <PaymentMethodBreakdownPie />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+        <QuickAnimatedLinks />
+        <PaymentMethodBreakdownPie minimal />
+        <CategorySpendingBar small />
       </div>
+
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <PaymentMethodBreakdownPie />
+      </div> */}
 
       <div className="mt-10">
         <TopCategoriesSummary />
