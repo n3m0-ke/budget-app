@@ -382,7 +382,7 @@ export default function AnalysisPage() {
                   <tr>
                     <th className="p-2">Category</th>
                     <th className="p-2">Budgeted (KES)</th>
-                    <th className="p-2 md:hidden">Actual (KES)</th>
+                    <th className="p-2 ">Actual (KES)</th>
                     <th className="p-2">Balance (KES)</th>
                   </tr>
                 </thead>
@@ -436,7 +436,7 @@ export default function AnalysisPage() {
                         <td className="p-2 text-gray-700">
                           {Number(c.amount).toLocaleString()}
                         </td>
-                        <td className={`p-2 ${actualColor} md:hidden`}>
+                        <td className={`p-2 ${actualColor}`}>
                           {actual.toLocaleString()}
                         </td>
                         <td className={`p-2 ${balanceColor}`}>

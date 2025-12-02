@@ -12,13 +12,39 @@ import {
     ResponsiveContainer
 } from "recharts";
 
-// const COLORS = ['#6366f1', '#34d399', '#f59e0b'];
 
 const COLORS = {
     "MPESA": "#34d399",
     "Bank Transfer": "#6366f1",
     "Cash": "#f59e0b"
   };
+
+  const renderCustomizedLabel = ({
+    cx,
+    cy,
+    midAngle,
+    innerRadius,
+    outerRadius,
+    percent
+  }) => {
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+    const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+  
+    return (
+      <text
+        x={x}
+        y={y}
+        fill="#fff"
+        fontSize={12}
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        {`${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
+  };
+  
 
 export default function PaymentMethodBreakdownPie() {
     const { user } = useAuth();
@@ -46,15 +72,19 @@ export default function PaymentMethodBreakdownPie() {
             <div className="w-full h-72">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart width={350} height={300}>
-                        <Pie 
-                            data={data} 
-                            dataKey="value" 
-                            nameKey="name" 
-                            outerRadius={100} label >
-                        {data.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
-                        ))}
+                        <Pie
+                            data={data}
+                            dataKey="value"
+                            nameKey="name"
+                            outerRadius={100}
+                            label={renderCustomizedLabel}
+                            labelLine={false}   // <-- removes the lines!!!!
+                            >
+                            {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
+                            ))}
                         </Pie>
+
                         <Tooltip />
                         <Legend />
                     </PieChart>

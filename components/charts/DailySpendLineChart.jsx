@@ -26,12 +26,7 @@ export default function DailySpendLineChart() {
         }
 
         load();
-
     }, [user]);
-
-    useEffect(() => {
-        console.log("UPDATED DATA:", data);
-    }, [data]);
 
     return (
         <div className="border border-grey-200 w-full bg-black/80 backdrop-blur-m shadow-sm rounded-xl p-6">
@@ -52,13 +47,40 @@ export default function DailySpendLineChart() {
                         <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
 
                         <XAxis
-                            dataKey="dateOfTransaction"
+                            dataKey="date"
                             stroke="#aaa"
                             tick={{ fontSize: 12 }}
-                            tickFormatter={(v) => v.slice(5)} // show only mm-dd
+                            tickFormatter={(v) => v}
+                            label={{
+                                value: "Date",
+                                position: "insideBottom",
+                                offset: -5,
+                                fill: "#ccc",
+                                fontSize: 12,
+                            }}
                         />
-                        <YAxis stroke="#aaa" tick={{ fontSize: 12 }} />
-                        <Tooltip formatter={(v) => `${v} KES`} />
+
+                        <YAxis
+                            stroke="#aaa"
+                            tick={{ fontSize: 12 }}
+                            label={{
+                                value: "Amount (KES)",
+                                angle: -90,
+                                position: "insideLeft",
+                                fill: "#ccc",
+                                fontSize: 12,
+                                offset: 10,
+                            }}
+                        />
+
+                        <Tooltip
+                            formatter={(v) => `${v} KES`}
+                            labelStyle={{ color: "#66CCFF" }}
+                            contentStyle={{
+                                backgroundColor: "rgba(0,0,0,0.8)",
+                                border: "2px solid #333",
+                            }}
+                        />
 
                         <Line
                             type="monotone"
