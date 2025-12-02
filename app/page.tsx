@@ -20,10 +20,9 @@ import {
   orderBy,
 } from 'firebase/firestore';
 
-import { getDailySpendData } from '@/lib/charts/getDailySpendData';
 import DailySpendLineChart from '@/components/charts/DailySpendLineChart';
-import { getPaymentMethodData } from '@/lib/charts/getPaymentMethodData';
 import PaymentMethodBreakdownPie from '@/components/charts/PaymentMethodBreakdownPie';
+import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 
 
 function formatMonth(monthStr: string) {
@@ -33,13 +32,6 @@ function formatMonth(monthStr: string) {
   return date.toLocaleString('default', { month: 'long', year: 'numeric' });
 }
 
-function formatDate(dateStr: string) {
-  if(!dateStr) return '';
-
-
-  // const date = new Date(dateStr);
-  // return date.toLocaleDateString();
-}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -169,16 +161,13 @@ export default function Dashboard() {
         Redirecting to login...
       </div>
     );
-  
-  
-  console.log("payment method data", getPaymentMethodData(user.uid));
 
   return (
     <div className="flex flex-col space-y-6 bg-transparent">
       <div className="flex justify-between items-center ">
-        <h1 className="text-3xl font-semibold text-blue-300 mb-2">
+        {/* <h1 className="text-3xl font-semibold text-blue-300 mb-2">
           Welcome back
-        </h1>
+        </h1> */}
 
         {/* <Button
           color="blue"
@@ -195,8 +184,8 @@ export default function Dashboard() {
       )}
 
       {/* Existing Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {/* Budget Summary Card */}
+      {/* <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+   
         <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
           <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Planned Budget
@@ -212,7 +201,6 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Expenditure Card */}
         <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
           <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Expenditures
@@ -228,7 +216,7 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Analysis Card */}
+     
         <div className="p-6 border bg-black/80 backdrop-blur-m rounded-lg shadow">
           <h2 className="font-semibold text-lg mb-2 text-gray-200">
             Monthly Analysis
@@ -243,12 +231,16 @@ export default function Dashboard() {
             View Monthly Analysis
           </button>
         </div>
-      </div>
+      </div> */}
 
       <DailySpendLineChart />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <PaymentMethodBreakdownPie />
+      </div>
+
+      <div className="mt-10">
+        <TopCategoriesSummary />
       </div>
 
       {/* Transaction Modal */}
