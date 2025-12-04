@@ -88,6 +88,7 @@ export default function PaymentMethodBreakdownPie({minimal = false}) {
                         </Pie>
 
                         <Tooltip />
+                        <Legend />
                     </PieChart>
                 </ResponsiveContainer>
             </div>

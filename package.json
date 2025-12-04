@@ -22,6 +22,7 @@
     "eslint-config-next": "13.5.1",
     "firebase": "^12.4.0",
     "firebase-tools": "^14.22.0",
+    "framer-motion": "^12.23.25",
     "js-cookie": "^3.0.5",
     "next": "13.5.1",
     "postcss": "8.4.30",

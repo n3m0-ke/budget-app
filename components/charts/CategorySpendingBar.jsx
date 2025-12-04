@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BarChart, Bar, ResponsiveContainer, Tooltip, Legend, YAxis, XAxis, AreaChart, CartesianGrid, Area } from "recharts";
+import { BarChart, Bar, ResponsiveContainer, Treemap, Tooltip, Legend, YAxis, XAxis, AreaChart, CartesianGrid, Area } from "recharts";
 import { getTopCategoriesData } from "@/lib/charts/getTopCategoriesData";
 import { useAuth } from "@/lib/useAuth";
 
@@ -15,13 +15,19 @@ export default function CategorySpendingBar({ small = false }) {
 
     async function load() {
       const res = await getTopCategoriesData(user.uid);
+
+      const children = res.byAmount.slice(0, 6).map((item) =>({
+        ...item,
+        size:item.value,
+      }));
       setData(res.byAmount.slice(0, 6));
+
       setTreeMapData([
         {
-          name: 'Spending By Category',
-          children: res.byAmount.slice(0,6)
-        }
-      ]);
+          name: "Spending By Category",
+          children,
+        },
+      ]);      
     }
 
     load();
@@ -40,8 +46,8 @@ export default function CategorySpendingBar({ small = false }) {
         </h2>
       )}
 
-      <div className={small ? "w-full h-52" : "w-full h-72"}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div className={small ? "w-full h-52" : "w-full h-full"}>
+        {/* <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data}
             layout="horizontal">
@@ -49,24 +55,41 @@ export default function CategorySpendingBar({ small = false }) {
             <Tooltip />
             <Bar dataKey="value" fill="#6366f1" radius={[6, 6, 0, 0]} />
           </BarChart>
-        </ResponsiveContainer>
-        {/* <ResponsiveContainer>
-          <AreaChart
-            data={treeMapData}
-            margin={{
-              top: 10,
-              right: 30,
-              left: 0,
-              bottom: 0,
-            }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Area type="monotone" dataKey="uv" stroke="#8884d8" fill="#8884d8" />
-          </AreaChart>
         </ResponsiveContainer> */}
+        <ResponsiveContainer width="100%" height="100%">
+          <Treemap
+            data={treeMapData}
+            dataKey="size"
+            aspectRatio={4 / 3}
+            stroke="#2d2d2d"
+            fill="#6366f1"
+            content={({ name, value, size, x, y, width, height }) => (
+              <g>
+                <rect
+                  x={x}
+                  y={y}
+                  width={width}
+                  height={height}
+                  fill="#6366f1"
+                  stroke="#1f1f1f"
+                  strokeWidth={2}
+                  rx={8}
+                />
+                {/* Only show text if the box is big enough */}
+                {width > 80 && height > 50 && (
+                  <>
+                    <text x={x + 10} y={y + 25} fill="white" fontSize={14} fontWeight="600">
+                      {name}
+                    </text>
+                    <text x={x + 10} y={y + 45} fill="#c7d2fe" fontSize={13}>
+                      KES {(size ?? value ?? 0).toLocaleString()}
+                    </text>
+                  </>
+                )}
+              </g>
+            )}
+          />
+        </ResponsiveContainer>
       </div>
     </div>
   );

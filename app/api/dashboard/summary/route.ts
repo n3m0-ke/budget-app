@@ -1,66 +1,128 @@
-// // /app/api/dashboard/summary/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/firebase";
+import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
 
-// import { db } from "@/lib/firebase";
-// import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+interface BudgetCategory {
+  amount: string;
+  name: string;
+  notes: string;
+  totalSpent?: number;
+}
 
-// export async function GET(req) {
-//   const userId = req.headers.get("userId"); // or however you pass auth
+interface BudgetDoc {
+  categories: BudgetCategory[];
+  closed: boolean;
+  total: number;
+  totalDebited: number;
+}
 
-//   const now = new Date();
-//   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+interface Transaction {
+  id: string;
+  amount: number;
+  category: string;
+  date: string;
+  dateOfTransaction: string;
+  note?: string;
+  paidThrough: string;
+  budgetMonth?: string;
+}
 
-//   // --- Fetch Budgets ---
-//   const budgetSnap = await getDocs(collection(db, "users", userId, "budgets"));
-//   const budgets = budgetSnap.docs.map((d) => d.data());
 
-//   const totalBudget = budgets.reduce((a, b) => a + (b.amount || 0), 0);
+export async function GET(req: NextRequest) {
+  try {
+    const userId = req.nextUrl.searchParams.get("userId");
+    if (!userId) return NextResponse.json({ error: "Missing userId" }, { status: 400 });
 
-//   // --- Fetch Transactions for This Month ---
-//   const txRef = collection(db, "users", userId, "transactions");
-//   const txQ = query(txRef, where("date", ">=", monthStart), orderBy("date", "desc"));
-//   const txSnap = await getDocs(txQ);
+    // ========= 1) GET LATEST BUDGET DOCUMENT =========
+    const budgetsRef = collection(db, "users", userId, "budgets");
+    const budgetsSnap = await getDocs(budgetsRef);
 
-//   const transactions = txSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (budgetsSnap.empty) {
+      return NextResponse.json({
+        budgets: {
+          plannedTotal: 0,
+          remaining: 0,
+          overspentCategoriesCount: 0
+        },
+        transactions: {
+          latest: null,
+          mpesaPercentage: 0,
+          totalCount: 0
+        },
+        analysis: {
+          budgetSpendPercentage: 0,
+          topCategory: null
+        }
+      });
+    }
 
-//   const totalSpent = transactions.reduce((a, t) => a + (t.amount || 0), 0);
+    // Budget IDs are formatted like "2025-11" so sorting works naturally
+    const latestBudgetDoc = budgetsSnap.docs
+      .sort((a, b) => (a.id < b.id ? 1 : -1))[0];
 
-//   // Remaining
-//   const remainingBudget = totalBudget - totalSpent;
+    const budgetData = latestBudgetDoc.data();
+    const categories = budgetData.categories || [];
 
-//   // Latest transaction
-//   const latestTx = transactions[0];
+    const plannedTotal = categories.reduce((sum: number, c: { amount: any; }) => sum + Number(c.amount), 0);
+    const remaining = plannedTotal - Number(budgetData.totalDebited || 0);
 
-//   // Category spend analysis
-//   const categoryTotals = {};
-//   const methodTotals = {};
+    // determine overspending: category.totalSpent > category.amount
+    const overspentCategoriesCount = categories.filter(
+      (c: { totalSpent: any; amount: any; }) => Number(c.totalSpent || 0) > Number(c.amount)
+    ).length;
 
-//   transactions.forEach((t) => {
-//     categoryTotals[t.category] = (categoryTotals[t.category] || 0) + t.amount;
-//     methodTotals[t.method] = (methodTotals[t.method] || 0) + t.amount;
-//   });
+    // ========= 2) GET TRANSACTIONS =========
+    const txRef = collection(db, "users", userId, "transactions");
+    const txSnap = await getDocs(txRef);
 
-//   const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const tx = txSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Transaction);
 
-//   const totalPayments = Object.values(methodTotals).reduce((a, b) => a + b, 0);
-//   const mpesaPercent = ((methodTotals["mpesa"] || 0) / totalPayments) * 100;
+    const totalTx = tx.length;
 
-//   return Response.json({
-//     budgets: {
-//       totalBudget,
-//       totalSpent,
-//       remainingBudget,
-//       overspendingCategories: Object.keys(categoryTotals).filter(
-//         (cat) => categoryTotals[cat] > (budgets.find((b) => b.category === cat)?.amount || Infinity)
-//       ),
-//     },
-//     transactions: {
-//       latest: latestTx || null,
-//       count: transactions.length,
-//     },
-//     analysis: {
-//       spendingPercentage: totalBudget ? (totalSpent / totalBudget) * 100 : 0,
-//       topCategory,
-//       mpesaPercent: Math.round(mpesaPercent),
-//     },
-//   });
-// }
+    const latest = tx
+      .sort((a, b) => new Date(b.dateOfTransaction).getTime() - new Date(a.date).getTime())[0] || null;
+
+    // MPESA usage %
+    const mpesaCount = tx.filter((t) => t.paidThrough === "MPESA").length;
+    const mpesaPercentage = totalTx ? Math.round((mpesaCount / totalTx) * 100) : 0;
+
+    // ========= 3) CATEGORY SPEND ANALYSIS =========
+    const categoryTotals: Record<string, number> = {};
+
+    tx.forEach((t) => {
+      const cat = t.category || "Uncategorized";
+      const amt = Number(t.amount || 0);
+
+      categoryTotals[cat] = (categoryTotals[cat] || 0) + amt;
+    });
+
+    const topCategory =
+      Object.entries(categoryTotals)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+    const totalSpent = Object.values(categoryTotals).reduce((a, b) => a + b, 0);
+    const budgetSpendPercentage = plannedTotal
+      ? Math.round((totalSpent / plannedTotal) * 100)
+      : 0;
+
+    // ========= FINAL RESPONSE =========
+    return NextResponse.json({
+      budgets: {
+        plannedTotal,
+        remaining,
+        overspentCategoriesCount
+      },
+      transactions: {
+        latest,
+        mpesaPercentage,
+        totalCount: totalTx
+      },
+      analysis: {
+        budgetSpendPercentage,
+        topCategory
+      }
+    });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}

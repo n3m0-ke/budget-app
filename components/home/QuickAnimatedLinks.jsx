@@ -3,76 +3,245 @@
 import { useEffect, useState } from "react";
 import { Tooltip } from "@mui/material";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/useAuth";
+import { db } from "@/lib/firebase";
+import {
+  collection,
+  getDocs,
+  query,
+  orderBy,
+  limit,
+} from "firebase/firestore";
+
+import { FiPocket, FiCreditCard, FiTrendingUp, FiCheckCircle, FiAlertCircle, FiXCircle } from "react-icons/fi";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function QuickAnimatedLinks() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState(null);
 
-  const [index, setIndex] = useState(0);
+  // Individual message index per card (plain JS object)
+  const [indices, setIndices] = useState({ 0: 0, 1: 0, 2: 0 });
 
-  // Each item has:
-  // title = static text
-  // messages = rotating preview texts (dynamic later)
+  // ──────────────────────────────────────────────────────
+  // FETCH DATA
+  // ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    async function load() {
+      try {
+        // Budgets
+        const budgetsRef = collection(db, "users", user.uid, "budgets");
+        const budgetsDocs = await getDocs(budgetsRef);
+        let categories = [];
+        let totalPlanned = 0;
+        let totalDebited = 0;
+
+        budgetsDocs.forEach((doc) => {
+          const d = doc.data();
+          categories.push(d);
+          totalPlanned += Number(d.amount || 0);
+          totalDebited += Number(d.debited || 0);
+        });
+
+        // Transactions
+        const txRef = collection(db, "users", user.uid, "transactions");
+        const latestTxQuery = query(txRef, orderBy("dateOfTransaction", "desc"), limit(1));
+        const latestTxSnap = await getDocs(latestTxQuery);
+        const latest = latestTxSnap.empty ? null : latestTxSnap.docs[0].data();
+
+        const allTxSnap = await getDocs(txRef);
+        const txCount = allTxSnap.size;
+
+        let spent = 0;
+        let categoryTotals = {};
+        let methodTotals = {};
+
+        allTxSnap.forEach((doc) => {
+          const t = doc.data();
+          const amt = Number(t.amount || 0);
+          spent += amt;
+          categoryTotals[t.category] = (categoryTotals[t.category] || 0) + amt;
+          methodTotals[t.paidThrough] = (methodTotals[t.paidThrough] || 0) + amt;
+        });
+
+        const topCategory = Object.keys(categoryTotals)
+          .sort((a, b) => categoryTotals[b] - categoryTotals[a])[0] || "N/A";
+
+        const topMethod = Object.keys(methodTotals)
+          .sort((a, b) => methodTotals[b] - methodTotals[a])[0] || "N/A";
+
+        const percentSpent = totalPlanned ? Math.round((spent / totalPlanned) * 100) : 0;
+
+        setData({
+          budgets: { categories, totalPlanned, totalDebited },
+          transactions: { latest, count: txCount },
+          analysis: { topCategory, topMethod, percentSpent, spent, totalPlanned },
+        });
+      } catch (err) {
+        console.error("FIRESTORE LOAD ERROR:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [user]);
+
+  // ──────────────────────────────────────────────────────
+  // INDEPENDENT MESSAGE ROTATION (3–6s per card)
+  // ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (loading || !data) return;
+
+    const intervals = Object.keys(indices).map((key) => {
+      const i = Number(key);
+      return setInterval(() => {
+        setIndices((prev) => ({
+          ...prev,
+          [i]: (prev[i] + 1) % items[i].messages.length,
+        }));
+      }, 3000 + Math.random() * 3000);
+    });
+
+    return () => intervals.forEach(clearInterval);
+  }, [loading, data]);
+
+  // ──────────────────────────────────────────────────────
+  // LOADING SKELETON
+  // ──────────────────────────────────────────────────────
+  if (loading || !data) {
+    return (
+      <div className="grid grid-rows-1 md:grid-rows-3 gap-6 p-4 w-full">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="h-32 bg-gray-800/50 border border-gray-700 rounded-xl animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // ──────────────────────────────────────────────────────
+  // CARD DATA
+  // ──────────────────────────────────────────────────────
   const items = [
     {
       title: "Budgets",
-      tooltip: "Set and review your monthly budgets per category.",
+      icon: FiPocket,
       route: "/budgets",
       messages: [
-        "You planned KES 45,000 this month",
-        "Remaining: KES 18,200",
-        "3 categories overspending"
-      ]
+        `Planned KES ${data.budgets.totalPlanned.toLocaleString()}`,
+        `Spent KES ${data.budgets.totalDebited.toLocaleString()}`,
+        `${data.budgets.categories.filter((c) => Number(c.amount) === 0).length} categories at KES 0`,
+      ],
+      gradient: "from-emerald-500 to-teal-600",
+      status: data.budgets.totalDebited <= data.budgets.totalPlanned ? "good" : "warning",
     },
     {
       title: "Transactions",
-      tooltip: "Track your daily spending by category and payment method.",
+      icon: FiCreditCard,
       route: "/transactions",
       messages: [
-        "Latest: Lunch – KES 350",
-        "MPESA • Coffee – KES 180",
-        "You logged 124 transactions"
-      ]
+        data.transactions.latest
+          ? `Latest: ${data.transactions.latest.category} – KES ${data.transactions.latest.amount}`
+          : "No recent transactions",
+        data.transactions.latest
+          ? `${data.transactions.latest.paidThrough} • ${data.transactions.latest.note || "No note"}`
+          : "No recent activity",
+        `${data.transactions.count} total transactions`,
+      ],
+      gradient: "from-blue-500 to-indigo-600",
+      status: "neutral",
     },
     {
       title: "Analysis",
-      tooltip: "Compare budgeted amounts with actual expenditures.",
+      icon: FiTrendingUp,
       route: "/analysis",
       messages: [
-        "You spent 61% of your budget",
-        "Food was your top category",
-        "MPESA was used 72% of the time"
-      ]
-    }
+        `You spent ${data.analysis.percentSpent}% of budget`,
+        `${data.analysis.topCategory} was top category`,
+        `${data.analysis.topMethod} used most`,
+      ],
+      gradient:
+        data.analysis.percentSpent > 100
+          ? "from-red-500 to-rose-600"
+          : data.analysis.percentSpent > 80
+          ? "from-amber-500 to-orange-600"
+          : "from-purple-500 to-pink-600",
+      status:
+        data.analysis.percentSpent > 100
+          ? "bad"
+          : data.analysis.percentSpent > 80
+          ? "warning"
+          : "good",
+    },
   ];
 
-  // cycle every 4 seconds
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setIndex((prev) => (prev + 1) % 3);
-    }, 4000);
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case "good":   return <FiCheckCircle className="w-6 h-6 text-green-400" />;
+      case "warning":return <FiAlertCircle className="w-6 h-6 text-amber-400" />;
+      case "bad":    return <FiXCircle className="w-6 h-6 text-red-400" />;
+      default:       return null;
+    }
+  };
 
-    return () => clearInterval(timer);
-  }, []);
-
+  // ──────────────────────────────────────────────────────
+  // RENDER
+  // ──────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="grid grid-rows-1 md:grid-rows-3 gap-4 p-4 w-full mx-auto">
       {items.map((item, i) => (
-        <Tooltip key={i} title={item.tooltip} arrow>
-          <div
-            onClick={() => router.push(item.route)}
-            className="cursor-pointer p-4 bg-black/70 rounded-lg border border-gray-700 shadow hover:bg-black/50 transition"
-          >
-            <p className="text-blue-300 font-semibold">{item.title}</p>
+        <motion.div
+          key={item.title}
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: i * 0.2, ease: "easeOut" }}
+          whileHover={{ y: -10, transition: { duration: 0.25 } }}
+          onClick={() => router.push(item.route)}
+          className="relative overflow-hidden rounded-xl border border-gray-800 bg-gray-900/70 backdrop-blur-xl shadow-xl cursor-pointer group"
+        >
+          {/* Gradient overlay */}
+          <div className={`absolute inset-0 bg-gradient-to-br ${item.gradient} opacity-10 group-hover:opacity-30 transition-opacity duration-500`} />
 
-            <p
-              className="text-gray-300 text-sm mt-1 transition-opacity duration-500 truncate"
-              key={index}
-            >
-              {item.messages[index % item.messages.length]}
-            </p>
+          <div className="relative p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="p-1 bg-black/50 rounded-lg backdrop-blur border border-gray-700">
+                <item.icon className="w-4 h-4 text-white" />
+              </div>
+              <h3 className="text-md font-semibold text-white mb-2">{item.title}</h3>
+            </div>
+
+            {/* <Tooltip title={item.title} arrow>
+              <h3 className="text-xl font-semibold text-white mb-2">{item.title}</h3>
+            </Tooltip> */}
+
+            {/* Rotating message */}
+            <div className="h-auto flex items-center">
+              <AnimatePresence mode="wait">
+                <motion.p
+                  key={indices[i]}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.35 }}
+                  className="text-sm text-gray-100 leading-relaxed"
+                >
+                  {item.messages[indices[i] % item.messages.length]}
+                </motion.p>
+              </AnimatePresence>
+            </div>
           </div>
-        </Tooltip>
+
+          <div className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/5 to-transparent group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+        </motion.div>
       ))}
     </div>
+
   );
 }
