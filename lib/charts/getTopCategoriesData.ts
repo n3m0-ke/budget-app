@@ -25,16 +25,19 @@ export async function getTopCategoriesData(userId: string) {
     });
 
     const byAmount = Object.entries(totals)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6); // top 6
 
     const byFrequency = Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
+    
+    console.log("byAmount: ", byAmount, "\nbyFrequency", byFrequency);
 
     return { byAmount, byFrequency };
+
   } catch (err) {
     console.error("Error loading top categories:", err);
     return { byAmount: [], byFrequency: [] };

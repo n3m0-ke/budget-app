@@ -71,8 +71,8 @@ export default function PaymentMethodBreakdownPie({minimal = false}) {
                 </h2>
             )}
 
-            <div className="w-full h-72 p-auto">
-                <ResponsiveContainer width={minimal ? 250 : 350} height={minimal ? 250 : 300}>
+            <div className="w-full h-72 flex items-center justify-center">
+                <ResponsiveContainer width={minimal ? 250 : 350} height={minimal ? 250 : 300} style={{margin: "auto"}}>
                     <PieChart width={350} height={300}>
                         <Pie
                             data={data}                            
@@ -88,7 +88,6 @@ export default function PaymentMethodBreakdownPie({minimal = false}) {
                         </Pie>
 
                         <Tooltip />
-                        <Legend />
                     </PieChart>
                 </ResponsiveContainer>
             </div>
