@@ -9,6 +9,7 @@ export default function CategorySpendingBar({ small = false }) {
   const { user } = useAuth();
   const [data, setData] = useState([]);
   const [treeMapData, setTreeMapData] = useState([]);
+  const COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
 
   useEffect(() => {
     if (!user) return;
@@ -46,7 +47,7 @@ export default function CategorySpendingBar({ small = false }) {
         </h2>
       )}
 
-      <div className={small ? "w-full h-52" : "w-full h-full"}>
+      <div className="min-h-52 h-full w-full">
         {/* <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data}
@@ -62,32 +63,34 @@ export default function CategorySpendingBar({ small = false }) {
             dataKey="size"
             aspectRatio={4 / 3}
             stroke="#2d2d2d"
-            fill="#6366f1"
-            content={({ name, value, size, x, y, width, height }) => (
-              <g>
-                <rect
-                  x={x}
-                  y={y}
-                  width={width}
-                  height={height}
-                  fill="#6366f1"
-                  stroke="#1f1f1f"
-                  strokeWidth={2}
-                  rx={8}
-                />
-                {/* Only show text if the box is big enough */}
-                {width > 80 && height > 50 && (
-                  <>
-                    <text x={x + 10} y={y + 25} fill="white" fontSize={14} fontWeight="600">
-                      {name}
-                    </text>
-                    <text x={x + 10} y={y + 45} fill="#c7d2fe" fontSize={13}>
-                      KES {(size ?? value ?? 0).toLocaleString()}
-                    </text>
-                  </>
-                )}
-              </g>
-            )}
+            content={({ name, size, value, x, y, width, height, index }) => {
+              const fillColor = COLORS[index % COLORS.length];
+            
+              return (
+                <g>
+                  <rect
+                    x={x}
+                    y={y}
+                    width={width}
+                    height={height}
+                    fill={fillColor}
+                    stroke="#111"
+                    strokeWidth={2}
+                    rx={8}
+                  />
+                  {width > 80 && height > 50 && (
+                    <>
+                      <text x={x + 10} y={y + 25} fill="#1919FF" fontSize={14} fontWeight="600">
+                        {name}
+                      </text>
+                      <text x={x + 10} y={y + 45} fill="#fff" fontSize={13} opacity={0.9}>
+                        KES {(size ?? value ?? 0).toLocaleString()}
+                      </text>
+                    </>
+                  )}
+                </g>
+              );
+            }}
           />
         </ResponsiveContainer>
       </div>
