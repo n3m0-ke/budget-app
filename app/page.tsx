@@ -26,6 +26,8 @@ import CategorySpendingBar from '@/components/charts/CategorySpendingBar';
 import QuickAnimatedLinks from '@/components/home/QuickAnimatedLinks';
 import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 
+import { migrateSavingsTransactionsToLedger } from '@/lib/migrateSavings';
+
 
 function formatMonth(monthStr: string) {
   if (!monthStr) return '';
@@ -33,6 +35,8 @@ function formatMonth(monthStr: string) {
   const date = new Date(Number(year), Number(month) - 1); // month is 0-indexed
   return date.toLocaleString('default', { month: 'long', year: 'numeric' });
 }
+
+
 
 
 export default function Dashboard() {
@@ -96,6 +100,17 @@ export default function Dashboard() {
   }, [form.budgetMonth, user]);
 
   const handleOpen = () => setOpen(!open);
+
+  const runMigration = async () => {
+
+    if (user){
+      const count = await migrateSavingsTransactionsToLedger(user.uid);
+      alert(`Migration complete. Added ${count} savings ledger entries.`);
+    }else{
+      alert(`User not set!`);
+    }
+    
+  };
 
   const addTransaction = async () => {
     if (!form.budgetMonth || !form.category || !form.amount)
@@ -161,6 +176,7 @@ export default function Dashboard() {
         Redirecting to login...
       </div>
     );
+  
 
   return (
     <div className="flex flex-col space-y-6 bg-transparent">
@@ -171,9 +187,12 @@ export default function Dashboard() {
 
         {/* <Button
           color="blue"
-          onClick={handleOpen}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"       >
-          + Add Transaction
+          onClick={runMigration}
+          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          placeholder={undefined} 
+          onPointerEnterCapture={undefined} 
+          onPointerLeaveCapture={undefined}       >
+          Run migration
         </Button> */}
       </div>
 

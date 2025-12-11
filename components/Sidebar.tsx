@@ -7,6 +7,7 @@ import {
   FiPieChart,
   FiList,
   FiCalendar,
+  FiEdit,
 } from 'react-icons/fi';
 import Logo from './Logo';
 
@@ -16,6 +17,7 @@ const links = [
   { href: '/transactions', label: 'Expenditures', icon: <FiList /> },
   { href: '/analysis', label: 'Analysis', icon: <FiPieChart /> },
   { href: '/monthly-analysis', label: 'Monthly Overview', icon: <FiTrendingUp /> },
+  { href: '/special_functions', label: 'Special Functions', icon: <FiEdit /> },
 ];
 
 export default function Sidebar({

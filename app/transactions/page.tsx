@@ -105,30 +105,53 @@ export default function TransactionsPage() {
 
   const addTransaction = async () => {
     setLoading(true);
+  
     if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction ) {
-      alert('Please fill all of budget month, category, amount, and date of transaction fields.');
+      alert('Please fill all required fields.');
       setLoading(false);
       return;
     }
-
-    if ((!budgets.includes(form.budgetMonth))){
+  
+    if (!budgets.includes(form.budgetMonth)) {
       alert("You cannot assign a transaction to a closed budget.");
       setLoading(false);
       return;
     }
-    
+  
     if (!user) return;
-
+  
     const tx = {
       ...form,
       amount: Number(form.amount),
       date: new Date().toISOString(),
     };
+  
     try {
-      await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
+      // 1. Create the transaction
+      const txRef = await addDoc(
+        collection(db, 'users', user.uid, 'transactions'),
+        tx
+      );
+  
+      // ---------------------------------------------------------
+      // 2. If category = "Savings", also create a savings ledger deposit
+      // ---------------------------------------------------------
+      if (tx.category === "Savings") {
+        await addDoc(collection(db, "users", user.uid, "savings_ledger"), {
+          type: "deposit",
+          amount: Number(tx.amount),
+          timestamp: Date.now(),
+          source: "transaction",
+          relatedTransactionId: txRef.id,
+          note: tx.note,
+        });
+      }
+      // ---------------------------------------------------------
+  
+      // Reset UI as before
       setForm({
         budgetMonth: '',
-        dateOfTransaction: '',
+        dateOfTransaction: new Date().toISOString().split('T')[0],
         category: '',
         amount: '',
         paidThrough: 'MPESA',
@@ -138,12 +161,14 @@ export default function TransactionsPage() {
       setMessage('Transaction added successfully 🎉');
       setLoading(false);
       setTimeout(() => setMessage(null), 3000);
+  
     } catch (err) {
       console.error(err);
       alert('Failed to add transaction');
       setLoading(false);
     }
   };
+  
 
   /** --- TanStack Table Setup --- */
   const columnHelper = createColumnHelper<any>();

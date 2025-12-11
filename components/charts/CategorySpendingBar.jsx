@@ -58,6 +58,14 @@ export default function CategorySpendingBar({ small = false }) {
           </BarChart>
         </ResponsiveContainer> */}
         <ResponsiveContainer width="100%" height="100%">
+          <Tooltip
+            formatter={(v) => [`KES ${v.toLocaleString()}`, "Spent"]} 
+            contentStyle={{
+              backgroundColor: "rgba(0,0,0,0.8)",
+              border: "1px solid #444",
+              color: "#fff",
+            }}
+          />
           <Treemap
             data={treeMapData}
             dataKey="size"

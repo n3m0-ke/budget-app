@@ -74,11 +74,12 @@ export default function DailySpendLineChart() {
                         />
 
                         <Tooltip
-                            formatter={(v) => `${v} KES`}
-                            labelStyle={{ color: "#66CCFF" }}
+                            formatter={(v) => [`${v} KES`, "amount"]}
+                            labelStyle={{ color: "#00E1FF" }}
+                            itemStyle={{ color: "#66CCFF", fontWeight: "600" }}   // 👈 ADD THIS
                             contentStyle={{
-                                backgroundColor: "rgba(0,0,0,0.8)",
-                                border: "2px solid #333",
+                              backgroundColor: "rgba(0,0,0,0.8)",
+                              border: "2px solid #333",
                             }}
                         />
 
