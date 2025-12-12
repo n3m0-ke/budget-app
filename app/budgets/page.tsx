@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../lib/firebase';
-import { collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface Category {
@@ -99,16 +99,44 @@ export default function BudgetPage() {
     if (!confirmSave) return;
 
     const budgetRef = doc(db, 'users', user.uid, 'budgets', month);
+
+    // Compute totals
+    const totalBudgeted = Number(total);
+    const totalDebitedNum = Number(totalDebited);
+    const unallocated = totalBudgeted - totalDebitedNum;
+
+    // Save the budget
     await setDoc(budgetRef, {
       categories,
-      total: Number(total),
-      totalDebited: Number(totalDebited),
-      closed: false
+      total: totalBudgeted,
+      totalDebited: totalDebitedNum,
+      closed: false,
     });
+
+    // Insert into unallocated ledger (only if > 0)
+    if (unallocated > 0) {
+      const ledgerRef = collection(
+        db,
+        'users',
+        user.uid,
+        'unallocated_ledger'
+      );
+
+      await addDoc(ledgerRef, {
+        type: 'deposit',
+        amount: unallocated,
+        timestamp: Date.now(),
+        budgetMonth: month,                 // "2025-01"
+        source: 'budget-creation',
+        note: '',
+        relatedTransactionId: '',
+      });
+    }
 
     alert('Budget saved!');
     setMonthExists(true);
   }
+
 
   return (
     <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">

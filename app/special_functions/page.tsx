@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import SavingsTab  from "@/components/SavingsTab";
+import DifferencesTab from "@/components/DifferencesTab";
 
 export default function SpecialFunctionsPage() {
   const [active, setActive] = useState<"savings" | "diffs">("savings");
@@ -46,54 +47,6 @@ export default function SpecialFunctionsPage() {
       <div className="bg-black/60 p-6 rounded-xl border border-gray-700 shadow-lg">
         {active === "savings" && <SavingsTab />}
         {active === "diffs" && <DifferencesTab />}
-      </div>
-    </div>
-  );
-}
-
-// function SavingsTab() {
-//   return (
-//     <div>
-//       <h2 className="text-xl font-semibold text-blue-300 mb-4">
-//         Manage Savings
-//       </h2>
-
-//       <p className="text-gray-300 leading-relaxed">
-//         Here you will be able to manipulate your accumulated savings:
-//         <br />• Record usage of savings  
-//         <br />• Move savings into goals  
-//         <br />• Track total saved vs. spent  
-//         <br />• Reassign savings to future categories  
-//         <br />• Reverse transactions made from savings
-//       </p>
-
-//       {/* Replace this placeholder with real components later */}
-//       <div className="mt-6 p-4 bg-blue-950/30 border border-blue-900 rounded-lg">
-//         Savings controls will go here.
-//       </div>
-//     </div>
-//   );
-// }
-
-function DifferencesTab() {
-  return (
-    <div>
-      <h2 className="text-xl font-semibold text-blue-300 mb-4">
-        Manage Budget Differences
-      </h2>
-
-      <p className="text-gray-300 leading-relaxed">
-        This section helps you determine how to treat monthly differences between:
-        <br />• Credited amount  
-        <br />• Budgeted amount  
-        <br />• Actual spending  
-        <br />
-        You can allocate surplus, move deficits, and understand month-to-month carryover.
-      </p>
-
-      {/* Replace this placeholder with your real controls*/}
-      <div className="mt-6 p-4 bg-blue-950/30 border border-blue-900 rounded-lg">
-        Budget difference controls will go here.
       </div>
     </div>
   );

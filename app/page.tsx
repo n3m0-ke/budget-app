@@ -27,6 +27,7 @@ import QuickAnimatedLinks from '@/components/home/QuickAnimatedLinks';
 import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 
 import { migrateSavingsTransactionsToLedger } from '@/lib/migrateSavings';
+import { migrateUnallocatedForUser } from '@/lib/migrateUnallocated';
 
 
 function formatMonth(monthStr: string) {
@@ -35,9 +36,6 @@ function formatMonth(monthStr: string) {
   const date = new Date(Number(year), Number(month) - 1); // month is 0-indexed
   return date.toLocaleString('default', { month: 'long', year: 'numeric' });
 }
-
-
-
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -104,8 +102,8 @@ export default function Dashboard() {
   const runMigration = async () => {
 
     if (user){
-      const count = await migrateSavingsTransactionsToLedger(user.uid);
-      alert(`Migration complete. Added ${count} savings ledger entries.`);
+      const count = await migrateUnallocatedForUser(user.uid);
+      alert(`Migration complete. Added ${count} records unallocated ledger entries.`);
     }else{
       alert(`User not set!`);
     }
@@ -193,7 +191,7 @@ export default function Dashboard() {
           onPointerEnterCapture={undefined} 
           onPointerLeaveCapture={undefined}       >
           Run migration
-        </Button> */}
+        </Button>  */}
       </div>
 
       {message && (
