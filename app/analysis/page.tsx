@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Cookies from 'js-cookie';
+import { CountUp } from 'use-count-up';
 
 interface CategoryBudget {
   name: string;
@@ -207,51 +208,52 @@ export default function AnalysisPage() {
             }}
             className="border border-gray-300 rounded-md px-3 py-1 bg-white shadow-sm focus:ring-2 focus:ring-sky-400 focus:outline-none"
           />
+          {/* Action Menu */}
+          <div>
+            {month && (
+              closed ? (
+                <span className="px-4 py-1.5 rounded-md bg-gray-200 text-gray-600 text-sm font-medium shadow-sm">
+                  Budget Closed
+                </span>
+              ) : (
+                <div className="relative inline-block text-left">
+                  <details className="group">
+                    <summary className="list-none cursor-pointer px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-sm rounded-md flex items-center gap-1 shadow-sm">
+                      Actions
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
+                      </svg>
+                    </summary>
+
+                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+
+                      {/* Close Budget */}
+                      <button
+                        onClick={() => closeBudget(month)}
+                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        Close Budget
+                      </button>
+
+                      <div className="border-t border-gray-200 my-1" />
+
+                      {/* Download PDF */}
+                      <button
+                        onClick={() => alert('PDF download feature coming soon!')}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                      >
+                        Download Analysis
+                      </button>
+
+                    </div>
+                  </details>
+                </div>
+              )
+            )}
+          </div>
         </div>
 
-        {/* Action Menu */}
-        <div>
-          {month && (
-            closed ? (
-              <span className="px-4 py-1.5 rounded-md bg-gray-200 text-gray-600 text-sm font-medium shadow-sm">
-                Budget Closed
-              </span>
-            ) : (
-              <div className="relative inline-block text-left">
-                <details className="group">
-                  <summary className="list-none cursor-pointer px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-sm rounded-md flex items-center gap-1 shadow-sm">
-                    Actions
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clipRule="evenodd" />
-                    </svg>
-                  </summary>
 
-                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
-
-                    {/* Close Budget */}
-                    <button
-                      onClick={() => closeBudget(month)}
-                      className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      Close Budget
-                    </button>
-
-                    <div className="border-t border-gray-200 my-1" />
-
-                    {/* Download PDF */}
-                    <button
-                      onClick={() => alert('PDF download feature coming soon!')}
-                      className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
-                    >
-                      Download Analysis
-                    </button>
-
-                  </div>
-                </details>
-              </div>
-            )
-          )}
-        </div>
 
         {/* Balance */}
         <div className="flex flex-col text-right">
@@ -260,7 +262,9 @@ export default function AnalysisPage() {
           <div className="flex items-center gap-2 text-gray-800 font-semibold text-lg">
             {month ? (
               <>
-                {remainingBudget.toLocaleString()} / {totalBudget.toLocaleString()} KES
+                <CountUp isCounting end={remainingBudget} duration={1.2} formatter={(value) => value.toLocaleString()} /> / <CountUp isCounting end={totalBudget} duration={1.2} formatter={(value) => value.toLocaleString()} /> KES
+
+                {/* {remainingBudget.toLocaleString()} / {totalBudget.toLocaleString()} KES */}
                 <span className="relative flex size-3">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
                   <span className="relative inline-flex size-3 rounded-full bg-sky-500"></span>
@@ -274,82 +278,88 @@ export default function AnalysisPage() {
 
       </div>
 
+      {loading &&
 
-
-
-      {loading && 
-      
-      <div className="flex min-h-screen justify-center text-grey-900 bg-transparent">
-        <svg
-          className="animate-spin h-5 w-5 text-blue mr-3"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          ></circle>
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-          ></path>
-        </svg>Loading data
-      </div>
+        <div className="flex min-h-screen justify-center text-grey-900 bg-transparent">
+          <svg
+            className="animate-spin h-5 w-5 text-blue mr-3"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+            ></path>
+          </svg>Loading data
+        </div>
       }
 
       {!loading && month && (
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
-            <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
+            {/* <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Amount Debited</span>
               <span className="text-xl font-semibold text-green-800">
                 {amountDebited.toLocaleString()} KES
               </span>
-            </div>
+            </div> */}
 
             <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Amount Budgeted</span>
               <span className="text-xl font-semibold text-blue-600">
-                {totalBudget.toLocaleString()} KES
+                <CountUp isCounting end={totalBudget} duration={1.2} formatter={(value) => value.toLocaleString()} /> KES
+                {/* {totalBudget.toLocaleString()} KES */}
               </span>
             </div>
 
             <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Amount Spent (outflows)</span>
               <span className="text-xl font-semibold text-red-600">
-                {amountSpent.toLocaleString()} KES
+                <CountUp
+                  isCounting
+                  end={amountSpent}
+                  duration={1.2}
+                  formatter={(value) => value.toLocaleString()}
+                /> KES
+                {/* {amountSpent.toLocaleString()} KES */}
               </span>
             </div>
 
             <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Amount Saved (so far)</span>
               <span className="text-xl font-semibold text-green-600">
-                {savedSoFar.toLocaleString()} KES
+                <CountUp isCounting end={savedSoFar} duration={1.2} formatter={(value) => value.toLocaleString()} /> KES
+                {/* {savedSoFar.toLocaleString()} KES */}
               </span>
             </div>
 
-            <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
+            {/* <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Balance (From Debited)</span>
               <span className={`text-xl font-semibold ${balanceColor}`}>
                 {balanceFromTotalDebited.toLocaleString()} KES
               </span>
-            </div>
+            </div> */}
 
             <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Balance (Usable)</span>
               <span className={`text-xl font-semibold ${balanceColor}`}>
-                {remainingBudget.toLocaleString()} KES
+                <CountUp isCounting end={remainingBudget} duration={1.2} formatter={(value) => value.toLocaleString()} /> KES
+                {/* {remainingBudget.toLocaleString()} KES */}
               </span>
             </div>
 
-            <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
+            {/* <div className="p-4 bg-white/70 backdrop-blur border rounded shadow flex flex-col">
               <span className="text-gray-800">Amount Lost</span>
               <span className="text-xl font-semibold text-red-800">
                 {amountLost.toLocaleString()} KES
@@ -361,7 +371,7 @@ export default function AnalysisPage() {
               <span className="text-xl font-semibold text-green-800">
                 {amountRecovered.toLocaleString()} KES
               </span>
-            </div>
+            </div> */}
           </div>
 
           {/* Budget Progress Bar */}
