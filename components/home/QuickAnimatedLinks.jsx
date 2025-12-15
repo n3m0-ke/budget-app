@@ -37,14 +37,19 @@ export default function QuickAnimatedLinks() {
         const budgetsRef = collection(db, "users", user.uid, "budgets");
         const budgetsDocs = await getDocs(budgetsRef);
         let categories = [];
+        let tese_categories = [];
         let totalPlanned = 0;
         let totalDebited = 0;
 
         budgetsDocs.forEach((doc) => {
           const d = doc.data();
           categories.push(d);
-          totalPlanned += Number(d.amount || 0);
-          totalDebited += Number(d.debited || 0);
+          tese_categories.push(d.categories);
+          
+          totalPlanned += Number(d.total || 0);
+          totalDebited += Number(d.totalDebited || 0);
+
+          console.log("Categories", tese_categories);
         });
 
         // Transactions
@@ -119,7 +124,7 @@ export default function QuickAnimatedLinks() {
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="h-32 bg-gray-800/50 border border-gray-700 rounded-xl animate-pulse"
+            className="h-28 bg-gray-800/50 border border-gray-700 rounded-xl animate-pulse"
           />
         ))}
       </div>
