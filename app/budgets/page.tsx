@@ -229,7 +229,7 @@ export default function BudgetPage() {
             </div>
 
             {/* Total */}
-            <div className="text-right font-semibold mb-4">
+            <div className="text-right text-blue-300 font-semibold mb-4">
               Total Budgeted: KES {total.toLocaleString()}
             </div>
 

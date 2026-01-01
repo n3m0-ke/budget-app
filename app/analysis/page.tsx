@@ -10,7 +10,8 @@ import {
   getDocs,
   query,
   where,
-  updateDoc
+  updateDoc,
+  addDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import Cookies from 'js-cookie';
@@ -181,7 +182,26 @@ export default function AnalysisPage() {
     const ref = doc(db, "users", user.uid, "budgets", month);
     await updateDoc(ref, { closed: true });
 
-    alert("Budget closed successfully.");
+    if(remainingBudget > 0){
+      const ledgerRef = collection(
+        db,
+        'users',
+        user.uid,
+        'unallocated_ledger'
+      );
+
+      await addDoc(ledgerRef, {
+        type: 'deposit',
+        amount: remainingBudget,
+        timestamp: Date.now(),
+        budgetMonth: month,                 // "2025-01"
+        source: 'budget-creation',
+        note: '',
+        relatedTransactionId: '',
+      });
+    }
+
+    alert("Budget closed permanently. Any balance transfered to unallocated ledgers.");
 
     setClosed(true);
   }

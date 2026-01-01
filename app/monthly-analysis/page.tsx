@@ -159,23 +159,6 @@ export default function MonthlySummaryPage() {
                             </summary>
 
                             <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
-                              
-                              {/* Close Budget */}
-                              {!b.closed ? (
-                                <button
-                                  onClick={() => closeBudget(b.month)}
-                                  className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  Close Budget
-                                </button>
-                              ) : (
-                                <span className="w-full block px-3 py-2 text-sm text-gray-400 cursor-not-allowed">
-                                  Closed
-                                </span>
-                              )}
-
-                              {/* Divider */}
-                              <div className="border-t border-gray-200 my-1" />
 
                               {/* Download PDF */}
                               <button
