@@ -28,6 +28,7 @@ import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 
 import { migrateSavingsTransactionsToLedger } from '@/lib/migrateSavings';
 import { migrateUnallocatedForUser } from '@/lib/migrateUnallocated';
+import { migrateChamaSavings } from '@/lib/migrateChama';
 
 
 function formatMonth(monthStr: string) {
@@ -102,7 +103,7 @@ export default function Dashboard() {
   const runMigration = async () => {
 
     if (user){
-      const count = await migrateUnallocatedForUser(user.uid);
+      const count = await migrateChamaSavings(user.uid);
       alert(`Migration complete. Added ${count} records unallocated ledger entries.`);
     }else{
       alert(`User not set!`);
