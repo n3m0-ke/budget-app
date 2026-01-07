@@ -21,6 +21,7 @@ const defaultCategories: string[] = [
   'Miscellaneous',
   'Savings',
   'Investment',
+  'Chama Contribution',
   'Money Lost',
   'Money Recovered',
 ];
