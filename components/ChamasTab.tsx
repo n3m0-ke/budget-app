@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/useAuth";
+import ActionsAccordion from "./special_functions/ActionsAccordion";
 
 /* =======================
    Types
@@ -228,6 +229,8 @@ export default function ChamaTab() {
     return (
         <div className="space-y-6">
 
+
+            <ActionsAccordion />
             {/* ===== Summary Cards ===== */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div
@@ -261,7 +264,7 @@ export default function ChamaTab() {
             </div>
 
             {/* ===== Create Chama ==== */}
-            <div className="p-4 bg-gray-900 rounded-lg space-y-3 border border-gray-800">
+            {/* <div className="p-4 bg-gray-900 rounded-lg space-y-3 border border-gray-800">
                 <h3 className="font-semibold text-green-300">
                     Add New Chama
                 </h3>
@@ -289,11 +292,11 @@ export default function ChamaTab() {
                 >
                     {creatingChama ? "Creating..." : "Create Chama"}
                 </button>
-            </div>
+            </div> */}
 
 
             {/* ===== Allocation Form ===== */}
-            <div className="p-4 bg-gray-900 rounded-lg space-y-3">
+            {/* <div className="p-4 bg-gray-900 rounded-lg space-y-3">
                 <h3 className="font-semibold text-blue-300">
                     Allocate from Unallocated
                 </h3>
@@ -336,7 +339,7 @@ export default function ChamaTab() {
                 >
                     {loading ? "Processing..." : "Allocate"}
                 </button>
-            </div>
+            </div> */}
 
             {/* ===== Ledger ===== */}
             <div className="p-4 bg-gray-900 rounded-lg">
