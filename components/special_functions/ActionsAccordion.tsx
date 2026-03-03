@@ -21,7 +21,7 @@ export default function ActionsAccordion() {
                 }}
                 className="w-full bg-black/60 backdrop-blur-xl">
                 <AccordionSummary
-                    expandIcon={<ArrowDropDownIcon />}
+                    expandIcon={<ArrowDropDownIcon className='text-gray-600' />}
                     aria-controls="panel1-content"
                     id="panel1-header"
                     sx={{
