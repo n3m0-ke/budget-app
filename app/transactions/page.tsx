@@ -151,22 +151,20 @@ export default function TransactionsPage() {
       // ---------------------------------------------------------
       // 2. If category = "chama contribution", also create a savings ledger deposit
       // ---------------------------------------------------------
-
+      await addDoc(
+        collection(db, "users", user.uid, "chama_ledger"),
+        {
+          chamaId: null,
+          type: "contribution",
+          amount: Number(tx.amount),
+          timestamp: Date.now(),
+          budgetMonth: tx.budgetMonth,
+          source: "transaction",
+          relatedTransactionId: txRef.id,
+          note: tx.note || `Payout received`
+        }
+      );
       
-      // if (tx.category === "Chama Contribution") {
-      // await addDoc(
-      //   collection(db, "users", user.uid, "chama_ledger"),
-      //   {
-      //     chamaId: "",
-      //     type: "contribution",
-      //     amount: Number(tx.amount),
-      //     timestamp,
-      //     budgetMonth: tx.budgetMonth,
-      //     source: "budget outflow",
-      //     note: `Contribution from ${formatMonth(tx.budgetMonth)} budget`,
-      //   }
-      // );
-      // ---------------------------------------------------------
   
       // Reset UI as before
       setForm({
