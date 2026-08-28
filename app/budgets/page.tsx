@@ -104,7 +104,7 @@ export default function BudgetPage() {
     // Compute totals
     const totalBudgeted = Number(total);
     const totalDebitedNum = Number(totalDebited);
-    const unallocated = totalBudgeted - totalDebitedNum;
+    const unallocated = totalDebitedNum - totalBudgeted;
 
     // Save the budget
     await setDoc(budgetRef, {
