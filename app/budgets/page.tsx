@@ -12,16 +12,16 @@ interface Category {
 }
 
 const defaultCategories: string[] = [
+  'Bills & utilities',
+  'Savings',
   'Fare/Transport',
   'Essentials + Grooming (recurring)',
-  'Household',
+  'Family Support',
+  'Chama Contribution',
   'Debt Repayment',
-  'Parents Support',
   'Grooming (non-recurring)',
   'Miscellaneous',
-  'Savings',
   'Investment',
-  'Chama Contribution',
   'Money Lost',
   'Money Recovered',
 ];
