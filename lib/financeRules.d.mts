@@ -4,7 +4,6 @@ export interface FinanceTransaction {
   budgetMonth?: string;
   category?: string;
   amount?: number | string | null;
-  [key: string]: unknown;
 }
 
 export interface MonthMetrics {

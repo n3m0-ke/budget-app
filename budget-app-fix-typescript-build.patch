@@ -1,0 +1,10 @@
+--- a/lib/financeRules.d.mts
++++ b/lib/financeRules.d.mts
+@@ -4,7 +4,6 @@
+   budgetMonth?: string;
+   category?: string;
+   amount?: number | string | null;
+-  [key: string]: unknown;
+ }
+ 
+ export interface MonthMetrics {
