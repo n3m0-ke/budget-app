@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/useAuth';
-import { signOut } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import {
   Dialog,
   DialogBody,
@@ -15,7 +14,7 @@ import {
 import {
   collection,
   getDocs,
-  addDoc,
+  doc,
   query,
   orderBy,
 } from 'firebase/firestore';
@@ -29,6 +28,7 @@ import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
 import { migrateSavingsTransactionsToLedger } from '@/lib/migrateSavings';
 import { migrateUnallocatedForUser } from '@/lib/migrateUnallocated';
 import { migrateChamaSavings } from '@/lib/migrateChama';
+import { createTransactionWithLedger } from '@/lib/financeOperations';
 
 
 function formatMonth(monthStr: string) {
@@ -39,7 +39,8 @@ function formatMonth(monthStr: string) {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const pendingTransactionId = useRef<string | null>(null);
   const router = useRouter();
 
   const [open, setOpen] = useState(false);
@@ -60,8 +61,8 @@ export default function Dashboard() {
   // Redirect to login if not authenticated
 
   useEffect(() => {
-    if (user === null) router.push('/login');
-  }, [user, router]);
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
 
   // Load available budget months and categories
   useEffect(() => {
@@ -117,37 +118,38 @@ export default function Dashboard() {
 
     if (!user) return;
 
-    const tx = {
-      ...form,
-      amount: Number(form.amount),
-      date: new Date().toISOString(),
-    };
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return alert('Enter an amount greater than zero.');
+    if (!form.dateOfTransaction) return alert('Select a transaction date.');
 
     setLoading(true);
-
     try {
-      await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
-
-      setTransactions([tx, ...transactions]);
-      setForm({
-        budgetMonth: '',
-        dateOfTransaction: '',
-        category: '',
-        amount: '',
-        paidThrough: 'MPESA',
-        note: '',
+      if (!pendingTransactionId.current) {
+        pendingTransactionId.current = doc(collection(db, 'users', user.uid, 'transactions')).id;
+      }
+      await createTransactionWithLedger(user.uid, pendingTransactionId.current, {
+        budgetMonth: form.budgetMonth,
+        dateOfTransaction: form.dateOfTransaction,
+        category: form.category,
+        amount,
+        paidThrough: form.paidThrough,
+        note: form.note,
       });
+      pendingTransactionId.current = null;
+      setTransactions([{ ...form, amount }, ...transactions]);
+      setForm({ budgetMonth: '', dateOfTransaction: '', category: '', amount: '', paidThrough: 'MPESA', note: '' });
       setOpen(false);
       setMessage('Transaction added successfully 🎉');
-      setLoading(false);
       setTimeout(() => setMessage(null), 3000);
-
     } catch (error) {
       console.error(error);
-      alert('Failed to add transaction');
+      alert(error instanceof Error ? error.message : 'Failed to add transaction. Retry to safely resume the same operation.');
+    } finally {
       setLoading(false);
     }
   };
+
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center text-gray-500">Checking your session...</div>;
 
   if (!user)
     return (

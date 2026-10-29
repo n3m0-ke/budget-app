@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   collection,
   onSnapshot,
   query,
   orderBy,
-  addDoc,
+  doc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/useAuth";
+import { withdrawFromLedger } from "@/lib/financeOperations";
 
 interface savingsRecord {
   id: string;
@@ -28,6 +29,7 @@ export default function SavingsTab() {
     const [note, setNote] = useState("");
     const [loading, setLoading] = useState(false);
     const [loadingLedger, setLoadingLedger] = useState(false);
+    const pendingWithdrawalId = useRef<string | null>(null);
 
     const savingsRef = user
     ? collection(db, "users", user.uid, "savings_ledger")
@@ -81,39 +83,28 @@ export default function SavingsTab() {
   
     // Handle withdrawal
     const handleWithdraw = async () => {
-      if (!withdrawAmount || Number(withdrawAmount) <= 0) {
-        alert("Enter a valid amount.");
+      const value = Number(withdrawAmount);
+      if (!Number.isFinite(value) || value <= 0) {
+        alert('Enter an amount greater than zero.');
         return;
       }
-      if (Number(withdrawAmount) > available) {
-        alert("You do not have enough savings to withdraw this amount.");
-        return;
-      }
-  
+      if (!user) return;
       setLoading(true);
       try {
-
-        if (!user) return null;
-
-        await addDoc(collection(db, "users", user.uid, "savings_ledger"), {
-          type: "withdrawal",
-          amount: Number(withdrawAmount),
-          timestamp: Date.now(),
-          source: "manual",
-          note: note || "",
-          relatedTransactionId: "",
-        });
-  
-        setWithdrawAmount("");
-        setNote("");
-        setLoading(false);
-      } catch (e) {
-        console.error(e);
-        alert("Failed to record withdrawal.");
+        if (!pendingWithdrawalId.current) {
+          pendingWithdrawalId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
+        }
+        await withdrawFromLedger(user.uid, 'savings', pendingWithdrawalId.current, value, note);
+        pendingWithdrawalId.current = null;
+        setWithdrawAmount('');
+        setNote('');
+      } catch (error) {
+        alert(error instanceof Error ? error.message : 'Failed to record withdrawal. Retry to safely resume the same operation.');
+      } finally {
         setLoading(false);
       }
     };
-  
+
     return (
       <div className="space-y-6">
         {loadingLedger ? (

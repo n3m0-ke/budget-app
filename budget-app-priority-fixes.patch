@@ -1,0 +1,1922 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..ba40f4b
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,6 @@
++NEXT_PUBLIC_FIREBASE_APIKEY=
++NEXT_PUBLIC_FIREBASE_AUTHDOMAIN=
++NEXT_PUBLIC_FIREBASE_PROJECTID=
++NEXT_PUBLIC_FIREBASE_STORAGEBUCKET=
++NEXT_PUBLIC_FIREBASE_MESSAGINGSENDERID=
++NEXT_PUBLIC_FIREBASE_APPID=
+diff --git a/.gitignore b/.gitignore
+index 9b1913e..69e5d84 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -34,3 +34,6 @@ yarn-error.log*
+ # typescript
+ *.tsbuildinfo
+ next-env.d.ts
++
++# Firebase diagnostics
++firebase-debug.log*
+diff --git a/PATCH_NOTES.md b/PATCH_NOTES.md
+new file mode 100644
+index 0000000..511ea9a
+--- /dev/null
++++ b/PATCH_NOTES.md
+@@ -0,0 +1,29 @@
++# Priority-fix patch notes
++
++## Implemented in this patch
++
++- Centralized transaction category accounting rules and added automated unit tests for ordinary expense, Savings, Chama Contribution, Money Lost, and Money Recovered.
++- Replaced direct transaction writes in the dashboard and Transactions page with a single Firestore transaction that validates the budget is open and atomically creates the transaction plus any required ledger movement.
++- Added per-user balance documents initialized from existing ledger entries, and transaction-based withdrawals/allocations that check current balance and update paired ledger entries atomically.
++- Added stable operation IDs and duplicate-operation checks for transactions, withdrawals, Chama allocations, and budget closure.
++- Made budget creation plus its opening unallocated-funds deposit atomic.
++- Unified budget closure from Monthly Analysis and Monthly Summary; it marks the budget closed and records a deterministic remaining-funds transfer in one Firestore transaction.
++- Added Firebase auth initialization loading state and an app-wide authenticated layout gate; sign-up now routes to `/` after auth state is confirmed.
++- Standardized newly written business dates on `dateOfTransaction` and changed transaction ordering to use that field.
++- Removed the unused `/api/dashboard/summary` endpoint rather than leave an unauthenticated userId-query API in place.
++- Added owner-scoped Firestore rules with default deny, plus manual auth/security smoke-test instructions.
++- Added an explicit, confirmed repair action for historical Chama ledger entries linked to existing non-Chama-Contribution transactions.
++- Removed the supplied `.env` and `firebase-debug.log` from this patched archive; use `.env.example` to create a local `.env.local`.
++
++## Verification status
++
++- `node --test tests/*.test.mjs`: passed (5 tests).
++- A Next.js production build and full TypeScript check could not be completed in this environment because project dependencies were not installed and package installation timed out. Run `npm ci`, `npm test`, and `npm run build` locally before deployment.
++- The Firebase security rules and end-to-end auth/balance workflows still require staging-project verification. Follow `tests/SECURITY_AND_AUTH_SMOKE_TESTS.md`.
++
++## Important before using the updated app
++
++1. Copy `.env.example` to `.env.local` and fill in the Firebase web configuration.
++2. Review and deploy `firestore.rules` to the intended Firebase project.
++3. In the Chamas section, run **Repair legacy Chama entries** once after reviewing its confirmation. This addresses the historical entries created by the previous unconditional ledger write.
++4. Run the manual security and financial workflow smoke tests against staging before production use.
+diff --git a/README.md b/README.md
+index 5ae7daf..9a1b661 100644
+--- a/README.md
++++ b/README.md
+@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
+ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+ 
+ Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
++
++## Financial-integrity fixes and tests
++
++- Run the pure accounting-rule tests with `npm test` (or `npm run test:finance`).
++- `dateOfTransaction` is the canonical business date. `createdAt` is metadata and must not be used to group spending by day/month.
++- Transaction category effects are centralized in `lib/financeRules.js`: `Savings` adds one savings deposit; `Chama Contribution` adds one contribution to the unallocated Chama pool; ordinary expenses, `Money Lost`, and `Money Recovered` do not automatically move money into savings or Chama ledgers.
++- Critical multi-document operations use Firestore transactions and stable operation IDs. The `account_balances` documents are initialized from the existing ledger the first time a protected operation needs a balance. All future writes to these balances must continue to go through the operations in `lib/financeOperations.ts`.
++- Budget creation/opening funds and budget closure/remaining-funds transfer are atomic. Both budget screens use the same close operation.
++- Before making new Chama allocations after deploying this patch, use **Repair legacy Chama entries** in the Chamas section once. It removes only old `source: transaction` ledger entries linked to an existing transaction whose category is not `Chama Contribution`, then recalculates the unallocated Chama balance. Review the confirmation carefully; unlinked historical entries are intentionally left untouched.
++- `firestore.rules` limits all `/users/{uid}/...` access to the authenticated user whose UID matches `{uid}` and denies other paths by default. Review and deploy these rules to the intended Firebase project before using the updated app.
++- The unused, unauthenticated `/api/dashboard/summary` endpoint was removed. If a custom server API is added later, verify its Firebase ID token server-side (Firebase Admin `verifyIdToken`) and derive the user UID from the verified token rather than accepting a query-string UID.
++- Follow `tests/SECURITY_AND_AUTH_SMOKE_TESTS.md` for manual auth, cross-account access, and financial workflow checks. These integration checks still need to be run against a staging Firebase project.
++- Copy `.env.example` to `.env.local` and fill in the Firebase web app configuration before running locally. Do not commit `.env.local` or service credentials.
++
++Legacy `lib/migrateSavings.ts`, `lib/migrateUnallocated.ts`, and `lib/migrateChama.ts` are one-off scripts from the original project. Do not rerun them after `account_balances` documents have been initialized without reviewing their idempotency and balance updates first.
+diff --git a/app/analysis/page.tsx b/app/analysis/page.tsx
+index 5d88052..38a5efe 100644
+--- a/app/analysis/page.tsx
++++ b/app/analysis/page.tsx
+@@ -10,10 +10,9 @@ import {
+   getDocs,
+   query,
+   where,
+-  updateDoc,
+-  addDoc
+ } from 'firebase/firestore';
+ import { db } from '@/lib/firebase';
++import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
+ import Cookies from 'js-cookie';
+ import { CountUp } from 'use-count-up';
+ 
+@@ -40,7 +39,7 @@ function formatMonth(monthStr: string) {
+ }
+ 
+ export default function AnalysisPage() {
+-  const { user } = useAuth();
++  const { user, loading: authLoading } = useAuth();
+   const router = useRouter();
+ 
+   const [month, setMonth] = useState<string>('');
+@@ -52,11 +51,12 @@ export default function AnalysisPage() {
+   const [amountDebited, setAmountDebited] = useState<number>(0);
+   const [loading, setLoading] = useState(false);
+   const [closed, setClosed] = useState(false);
++  const [closing, setClosing] = useState(false);
+ 
+   // Redirect if not logged in
+   useEffect(() => {
+-    if (user === null) router.push('/login');
+-  }, [user, router]);
++    if (!authLoading && !user) router.replace('/login');
++  }, [authLoading, user, router]);
+ 
+   // Load previously selected month from cookie
+   useEffect(() => {
+@@ -159,6 +159,7 @@ export default function AnalysisPage() {
+     Math.min(100, (remainingBudget / denom) * 100)
+   );
+ 
++  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
+   if (!user) return null;
+ 
+   let balanceColor = 'text-yellow-500'; // default
+@@ -172,40 +173,22 @@ export default function AnalysisPage() {
+   }
+ 
+   async function closeBudget(month: string) {
+-    if (!user) return;
+-
+-    const confirmSave = confirm(
+-      `Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`
+-    );
++    if (!user || closing) return;
++    const confirmSave = confirm(`Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`);
+     if (!confirmSave) return;
+-
+-    const ref = doc(db, "users", user.uid, "budgets", month);
+-    await updateDoc(ref, { closed: true });
+-
+-    if(remainingBudget > 0){
+-      const ledgerRef = collection(
+-        db,
+-        'users',
+-        user.uid,
+-        'unallocated_ledger'
+-      );
+-
+-      await addDoc(ledgerRef, {
+-        type: 'deposit',
+-        amount: remainingBudget,
+-        timestamp: Date.now(),
+-        budgetMonth: month,                 // "2025-01"
+-        source: 'budget-creation',
+-        note: '',
+-        relatedTransactionId: '',
+-      });
++    setClosing(true);
++    try {
++      await closeBudgetAndTransferRemainder(user.uid, month);
++      setClosed(true);
++      alert('Budget closed successfully. Any remaining balance was transferred once to unallocated funds.');
++    } catch (error) {
++      alert(error instanceof Error ? error.message : 'Failed to close budget.');
++    } finally {
++      setClosing(false);
+     }
+-
+-    alert("Budget closed permanently. Any balance transfered to unallocated ledgers.");
+-
+-    setClosed(true);
+   }
+ 
++
+   return (
+     <div className="max-w-5xl mx-auto p-6">
+       <h1 className="text-2xl font-semibold mb-6 text-blue-300">
+@@ -249,7 +232,7 @@ export default function AnalysisPage() {
+ 
+                       {/* Close Budget */}
+                       <button
+-                        onClick={() => closeBudget(month)}
++                        onClick={() => closeBudget(month)} disabled={closing}
+                         className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                       >
+                         Close Budget
+diff --git a/app/budgets/page.tsx b/app/budgets/page.tsx
+index b55b9bc..2d1ab5a 100644
+--- a/app/budgets/page.tsx
++++ b/app/budgets/page.tsx
+@@ -1,9 +1,11 @@
+ 'use client';
+ 
+ import { useState, useEffect } from 'react';
+-import { db, auth } from '../../lib/firebase';
+-import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
+-import { onAuthStateChanged, User } from 'firebase/auth';
++import { useRouter } from 'next/navigation';
++import { db } from '@/lib/firebase';
++import { collection, doc, getDoc } from 'firebase/firestore';
++import { useAuth } from '@/lib/useAuth';
++import { createBudgetWithOpeningFunds } from '@/lib/financeOperations';
+ 
+ interface Category {
+   name: string;
+@@ -34,7 +36,8 @@ function formatMonth(monthStr: string) {
+ }
+ 
+ export default function BudgetPage() {
+-  const [user, setUser] = useState<User | null>(null);
++  const { user, loading: authLoading } = useAuth();
++  const router = useRouter();
+   const [month, setMonth] = useState<string>('');
+   const [totalDebited, setTotalDebited] = useState<string>('');
+   const [categories, setCategories] = useState<Category[]>(
+@@ -49,11 +52,8 @@ export default function BudgetPage() {
+   );
+ 
+   useEffect(() => {
+-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+-      setUser(currentUser);
+-    });
+-    return () => unsubscribe();
+-  }, []);
++    if (!authLoading && !user) router.replace('/login');
++  }, [authLoading, user, router]);
+ 
+   async function handleLoadMonth(selectedMonth: string) {
+     setMonth(selectedMonth);
+@@ -87,58 +87,35 @@ export default function BudgetPage() {
+ 
+   async function handleSave() {
+     if (!user) return;
+-
+-    // Validation: all amount fields and totalDebited must be filled
+     if (!month || !totalDebited || categories.some((c) => c.amount === '')) {
+       alert('Please fill in all amount fields and total debited.');
+       return;
+     }
+-
+-    const confirmSave = confirm(
+-      `Are you sure you want to save this budget for ${month}? It can no longer be edited.`
+-    );
+-    if (!confirmSave) return;
+-
+-    const budgetRef = doc(db, 'users', user.uid, 'budgets', month);
+-
+-    // Compute totals
+-    const totalBudgeted = Number(total);
+     const totalDebitedNum = Number(totalDebited);
+-    const unallocated = totalDebitedNum - totalBudgeted;
+-
+-    // Save the budget
+-    await setDoc(budgetRef, {
+-      categories,
+-      total: totalBudgeted,
+-      totalDebited: totalDebitedNum,
+-      closed: false,
+-    });
+-
+-    // Insert into unallocated ledger (only if > 0)
+-    if (unallocated > 0) {
+-      const ledgerRef = collection(
+-        db,
+-        'users',
+-        user.uid,
+-        'unallocated_ledger'
+-      );
+-
+-      await addDoc(ledgerRef, {
+-        type: 'deposit',
+-        amount: unallocated,
+-        timestamp: Date.now(),
+-        budgetMonth: month,                 // "2025-01"
+-        source: 'budget-creation',
+-        note: '',
+-        relatedTransactionId: '',
+-      });
++    if (!Number.isFinite(totalDebitedNum) || totalDebitedNum < 0) {
++      alert('Enter a valid total debited amount.');
++      return;
+     }
++    const confirmSave = confirm(`Are you sure you want to save this budget for ${month}? It can no longer be edited.`);
++    if (!confirmSave) return;
+ 
+-    alert('Budget saved!');
+-    setMonthExists(true);
++    setLoading(true);
++    try {
++      await createBudgetWithOpeningFunds(user.uid, month, categories, totalDebitedNum);
++      alert('Budget saved!');
++      setMonthExists(true);
++    } catch (error) {
++      alert(error instanceof Error ? error.message : 'Failed to save budget.');
++    } finally {
++      setLoading(false);
++    }
+   }
+ 
+ 
++
++  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
++  if (!user) return null;
++
+   return (
+     <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">
+       <div className="max-w-3xl mx-auto border bg-black/80 backdrop-blur-m rounded-xl shadow p-4 sm:p-6 md:p-8">
+diff --git a/app/login/page.tsx b/app/login/page.tsx
+index 2011582..480b610 100644
+--- a/app/login/page.tsx
++++ b/app/login/page.tsx
+@@ -4,9 +4,16 @@ import { useState } from 'react';
+ import { signInWithEmailAndPassword } from 'firebase/auth';
+ import { auth } from '@/lib/firebase';
+ import { useRouter } from 'next/navigation';
++import { useAuth } from '@/lib/useAuth';
++import { useEffect } from 'react';
+ 
+ export default function LoginPage() {
+   const router = useRouter();
++  const { user, loading: authLoading } = useAuth();
++
++  useEffect(() => {
++    if (!authLoading && user) router.replace('/');
++  }, [authLoading, user, router]);
+   const [email, setEmail] = useState('');
+   const [password, setPassword] = useState('');
+   const [error, setError] = useState('');
+@@ -20,7 +27,6 @@ export default function LoginPage() {
+ 
+     try {
+       await signInWithEmailAndPassword(auth, email, password);
+-      router.push('/');
+     } catch (err: any) {
+       setError('Invalid email or password.');
+     } finally {
+diff --git a/app/monthly-analysis/page.tsx b/app/monthly-analysis/page.tsx
+index 9e77cae..611b195 100644
+--- a/app/monthly-analysis/page.tsx
++++ b/app/monthly-analysis/page.tsx
+@@ -3,8 +3,10 @@
+ import { useEffect, useState } from 'react';
+ import { useAuth } from '@/lib/useAuth';
+ import { useRouter } from 'next/navigation';
+-import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
++import { collection, getDocs } from 'firebase/firestore';
+ import { db } from '@/lib/firebase';
++import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
++import { calculateMonthMetrics } from '@/lib/financeRules.mjs';
+ 
+ interface Budget {
+   totalDebited: number;
+@@ -27,17 +29,18 @@ function formatMonth(monthStr: string) {
+ }
+ 
+ export default function MonthlySummaryPage() {
+-  const { user } = useAuth();
++  const { user, loading: authLoading } = useAuth();
+   const router = useRouter();
+ 
+   const [budgets, setBudgets] = useState<Budget[]>([]);
+   const [transactions, setTransactions] = useState<Transaction[]>([]);
+   const [loading, setLoading] = useState(false);
++  const [closingMonth, setClosingMonth] = useState<string | null>(null);
+ 
+   useEffect(() => {
+-    if (user === null) router.push('/login');
+-    else loadData();
+-  }, [user, router]);
++    if (!authLoading && !user) router.replace('/login');
++    else if (user) loadData();
++  }, [authLoading, user, router]);
+ 
+ 
+ 
+@@ -67,35 +70,31 @@ export default function MonthlySummaryPage() {
+ 
+   // Helper to calculate total spent for a month
+   function getTotalSpent(month: string) {
+-    // total outflows (exclude 'Money Recovered' because it's an inflow)
+-    const totalOutflows = transactions
+-      .filter((tx) => tx.budgetMonth === month && tx.category !== 'Money Recovered')
+-      .reduce((s, tx) => s + Number(tx.amount || 0), 0);
+-  
+-    // total recovered (inflows)
+-    const totalRecovered = transactions
+-      .filter((tx) => tx.budgetMonth === month && tx.category === 'Money Recovered')
+-      .reduce((s, tx) => s + Number(tx.amount || 0), 0);
+-  
+-    return totalOutflows - totalRecovered;
++    const budget = budgets.find((item) => item.month === month);
++    const totalBudget = (budget?.categories || []).reduce((sum, category) => sum + Number(category.amount || 0), 0);
++    return calculateMonthMetrics(transactions, month, totalBudget).netSpend;
+   }
+ 
+-  if (!user) return null;
+-
+   async function closeBudget(month: string) {
+-    if (!user) return;
+-
+-    const confirmSave = confirm(
+-      `Are you sure you want to close the budget for ${month}? This action cannot be undone.`
+-    );
++    if (!user || closingMonth) return;
++    const confirmSave = confirm(`Are you sure you want to close the budget for ${month}? This action cannot be undone.`);
+     if (!confirmSave) return;
+-  
+-    const ref = doc(db, "users", user.uid, "budgets", month);
+-    await updateDoc(ref, { closed: true });
+-  
+-    alert("Budget closed successfully.");
++    setClosingMonth(month);
++    try {
++      await closeBudgetAndTransferRemainder(user.uid, month);
++      setBudgets((current) => current.map((budget) => budget.month === month ? { ...budget, closed: true } : budget));
++      alert('Budget closed successfully. Any remaining balance was transferred once to unallocated funds.');
++    } catch (error) {
++      alert(error instanceof Error ? error.message : 'Failed to close budget.');
++    } finally {
++      setClosingMonth(null);
++    }
+   }
+ 
++
++  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
++  if (!user) return null;
++
+   return (
+     <div className="max-w-6xl mx-auto p-6">
+       <h1 className="text-2xl font-semibold mb-6 text-gray-700">
+diff --git a/app/page.tsx b/app/page.tsx
+index 6ec5be0..1dde11e 100644
+--- a/app/page.tsx
++++ b/app/page.tsx
+@@ -1,10 +1,9 @@
+ 'use client';
+ 
+-import { useState, useEffect } from 'react';
++import { useState, useEffect, useRef } from 'react';
+ import { useRouter } from 'next/navigation';
+ import { useAuth } from '@/lib/useAuth';
+-import { signOut } from 'firebase/auth';
+-import { auth, db } from '@/lib/firebase';
++import { db } from '@/lib/firebase';
+ import {
+   Dialog,
+   DialogBody,
+@@ -15,7 +14,7 @@ import {
+ import {
+   collection,
+   getDocs,
+-  addDoc,
++  doc,
+   query,
+   orderBy,
+ } from 'firebase/firestore';
+@@ -29,6 +28,7 @@ import TopCategoriesSummary from '@/components/charts/TopCategoriesSummary';
+ import { migrateSavingsTransactionsToLedger } from '@/lib/migrateSavings';
+ import { migrateUnallocatedForUser } from '@/lib/migrateUnallocated';
+ import { migrateChamaSavings } from '@/lib/migrateChama';
++import { createTransactionWithLedger } from '@/lib/financeOperations';
+ 
+ 
+ function formatMonth(monthStr: string) {
+@@ -39,7 +39,8 @@ function formatMonth(monthStr: string) {
+ }
+ 
+ export default function Dashboard() {
+-  const { user } = useAuth();
++  const { user, loading: authLoading } = useAuth();
++  const pendingTransactionId = useRef<string | null>(null);
+   const router = useRouter();
+ 
+   const [open, setOpen] = useState(false);
+@@ -60,8 +61,8 @@ export default function Dashboard() {
+   // Redirect to login if not authenticated
+ 
+   useEffect(() => {
+-    if (user === null) router.push('/login');
+-  }, [user, router]);
++    if (!authLoading && !user) router.replace('/login');
++  }, [authLoading, user, router]);
+ 
+   // Load available budget months and categories
+   useEffect(() => {
+@@ -117,38 +118,39 @@ export default function Dashboard() {
+ 
+     if (!user) return;
+ 
+-    const tx = {
+-      ...form,
+-      amount: Number(form.amount),
+-      date: new Date().toISOString(),
+-    };
++    const amount = Number(form.amount);
++    if (!Number.isFinite(amount) || amount <= 0) return alert('Enter an amount greater than zero.');
++    if (!form.dateOfTransaction) return alert('Select a transaction date.');
+ 
+     setLoading(true);
+-
+     try {
+-      await addDoc(collection(db, 'users', user.uid, 'transactions'), tx);
+-
+-      setTransactions([tx, ...transactions]);
+-      setForm({
+-        budgetMonth: '',
+-        dateOfTransaction: '',
+-        category: '',
+-        amount: '',
+-        paidThrough: 'MPESA',
+-        note: '',
++      if (!pendingTransactionId.current) {
++        pendingTransactionId.current = doc(collection(db, 'users', user.uid, 'transactions')).id;
++      }
++      await createTransactionWithLedger(user.uid, pendingTransactionId.current, {
++        budgetMonth: form.budgetMonth,
++        dateOfTransaction: form.dateOfTransaction,
++        category: form.category,
++        amount,
++        paidThrough: form.paidThrough,
++        note: form.note,
+       });
++      pendingTransactionId.current = null;
++      setTransactions([{ ...form, amount }, ...transactions]);
++      setForm({ budgetMonth: '', dateOfTransaction: '', category: '', amount: '', paidThrough: 'MPESA', note: '' });
+       setOpen(false);
+       setMessage('Transaction added successfully 🎉');
+-      setLoading(false);
+       setTimeout(() => setMessage(null), 3000);
+-
+     } catch (error) {
+       console.error(error);
+-      alert('Failed to add transaction');
++      alert(error instanceof Error ? error.message : 'Failed to add transaction. Retry to safely resume the same operation.');
++    } finally {
+       setLoading(false);
+     }
+   };
+ 
++  if (authLoading) return <div className="flex min-h-screen items-center justify-center text-gray-500">Checking your session...</div>;
++
+   if (!user)
+     return (
+       <div className="flex min-h-screen items-center justify-center text-gray-500 bg-transparent">
+diff --git a/app/signup/page.tsx b/app/signup/page.tsx
+index 0ba48c5..86e4315 100644
+--- a/app/signup/page.tsx
++++ b/app/signup/page.tsx
+@@ -1,12 +1,18 @@
+ 'use client';
+ 
+-import { useState } from 'react';
++import { useState, useEffect } from 'react';
+ import { createUserWithEmailAndPassword } from 'firebase/auth';
+ import { auth } from '@/lib/firebase';
+ import { useRouter } from 'next/navigation';
++import { useAuth } from '@/lib/useAuth';
+ 
+ export default function SignupPage() {
+   const router = useRouter();
++  const { user, loading: authLoading } = useAuth();
++
++  useEffect(() => {
++    if (!authLoading && user) router.replace('/');
++  }, [authLoading, user, router]);
+   const [email, setEmail] = useState('');
+   const [password, setPassword] = useState('');
+   const [error, setError] = useState('');
+@@ -15,7 +21,6 @@ export default function SignupPage() {
+     e.preventDefault();
+     try {
+       await createUserWithEmailAndPassword(auth, email, password);
+-      router.push('/dashboard');
+     } catch (err: any) {
+       setError(err.message);
+     }
+diff --git a/app/transactions/page.tsx b/app/transactions/page.tsx
+index d210573..58fd389 100644
+--- a/app/transactions/page.tsx
++++ b/app/transactions/page.tsx
+@@ -1,5 +1,6 @@
+ 'use client';
+-import { useState, useEffect, useMemo } from 'react';
++import { useState, useEffect, useMemo, useRef } from 'react';
++import { useRouter } from 'next/navigation';
+ import { db } from '@/lib/firebase';
+ import {
+   collection,
+@@ -8,9 +9,10 @@ import {
+   orderBy,
+   where,
+   getDocs,
+-  addDoc,
++  doc,
+ } from 'firebase/firestore';
+ import { useAuth } from '@/lib/useAuth';
++import { createTransactionWithLedger } from '@/lib/financeOperations';
+ import {
+   createColumnHelper,
+   getCoreRowModel,
+@@ -37,7 +39,13 @@ function formatDate(dateStr: string) {
+ }
+ 
+ export default function TransactionsPage() {
+-  const { user } = useAuth();
++  const { user, loading: authLoading } = useAuth();
++  const router = useRouter();
++  const pendingTransactionId = useRef<string | null>(null);
++
++  useEffect(() => {
++    if (!authLoading && !user) router.replace('/login');
++  }, [authLoading, user, router]);
+   const [budgets, setBudgets] = useState<string[]>([]);
+   const [categories, setCategories] = useState<string[]>([]);
+   const [form, setForm] = useState({
+@@ -94,7 +102,7 @@ export default function TransactionsPage() {
+   useEffect(() => {
+     if (!user) return;
+     const txCol = collection(db, 'users', user.uid, 'transactions');
+-    const q = query(txCol, orderBy('date', 'desc'));
++    const q = query(txCol, orderBy('dateOfTransaction', 'desc'));
+     const unsubscribe = onSnapshot(q, (snapshot) => {
+       const txs: any[] = [];
+       snapshot.forEach((doc) => txs.push({ id: doc.id, ...doc.data() }));
+@@ -104,69 +112,31 @@ export default function TransactionsPage() {
+   }, [user]);
+ 
+   const addTransaction = async () => {
+-    setLoading(true);
+-  
+-    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction ) {
++    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction) {
+       alert('Please fill all required fields.');
+-      setLoading(false);
+       return;
+     }
+-  
+-    if (!budgets.includes(form.budgetMonth)) {
+-      alert("You cannot assign a transaction to a closed budget.");
+-      setLoading(false);
++    const amount = Number(form.amount);
++    if (!Number.isFinite(amount) || amount <= 0) {
++      alert('Enter an amount greater than zero.');
+       return;
+     }
+-  
+     if (!user) return;
+-  
+-    const tx = {
+-      ...form,
+-      amount: Number(form.amount),
+-      date: new Date().toISOString(),
+-    };
+-  
++
++    setLoading(true);
+     try {
+-      // 1. Create the transaction
+-      const txRef = await addDoc(
+-        collection(db, 'users', user.uid, 'transactions'),
+-        tx
+-      );
+-  
+-      // ---------------------------------------------------------
+-      // 2. If category = "Savings", also create a savings ledger deposit
+-      // ---------------------------------------------------------
+-      if (tx.category === "Savings") {
+-        await addDoc(collection(db, "users", user.uid, "savings_ledger"), {
+-          type: "deposit",
+-          amount: Number(tx.amount),
+-          timestamp: Date.now(),
+-          source: "transaction",
+-          relatedTransactionId: txRef.id,
+-          note: tx.note,
+-        });
++      if (!pendingTransactionId.current) {
++        pendingTransactionId.current = doc(collection(db, 'users', user.uid, 'transactions')).id;
+       }
+-      // ---------------------------------------------------------
+-
+-      // ---------------------------------------------------------
+-      // 2. If category = "chama contribution", also create a savings ledger deposit
+-      // ---------------------------------------------------------
+-      await addDoc(
+-        collection(db, "users", user.uid, "chama_ledger"),
+-        {
+-          chamaId: null,
+-          type: "contribution",
+-          amount: Number(tx.amount),
+-          timestamp: Date.now(),
+-          budgetMonth: tx.budgetMonth,
+-          source: "transaction",
+-          relatedTransactionId: txRef.id,
+-          note: tx.note || `Payout received`
+-        }
+-      );
+-      
+-  
+-      // Reset UI as before
++      await createTransactionWithLedger(user.uid, pendingTransactionId.current, {
++        budgetMonth: form.budgetMonth,
++        dateOfTransaction: form.dateOfTransaction,
++        category: form.category,
++        amount,
++        paidThrough: form.paidThrough,
++        note: form.note,
++      });
++      pendingTransactionId.current = null;
+       setForm({
+         budgetMonth: '',
+         dateOfTransaction: new Date().toISOString().split('T')[0],
+@@ -177,16 +147,14 @@ export default function TransactionsPage() {
+       });
+       setCategories([]);
+       setMessage('Transaction added successfully 🎉');
+-      setLoading(false);
+       setTimeout(() => setMessage(null), 3000);
+-  
+     } catch (err) {
+       console.error(err);
+-      alert('Failed to add transaction');
++      alert(err instanceof Error ? err.message : 'Failed to add transaction. Retry to safely resume the same operation.');
++    } finally {
+       setLoading(false);
+     }
+   };
+-  
+ 
+   /** --- TanStack Table Setup --- */
+   const columnHelper = createColumnHelper<any>();
+@@ -267,6 +235,8 @@ export default function TransactionsPage() {
+     initialState: { pagination: { pageSize: 10 } },
+   });
+ 
++  if (authLoading) return <div className="flex min-h-screen items-center justify-center text-gray-500">Checking your session...</div>;
++
+   if (!user)
+     return (
+       <div className="flex min-h-screen items-center justify-center text-gray-500">
+diff --git a/components/ChamasTab.tsx b/components/ChamasTab.tsx
+index 597f8bd..f0931ae 100644
+--- a/components/ChamasTab.tsx
++++ b/components/ChamasTab.tsx
+@@ -1,16 +1,19 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import { useEffect, useState, useRef } from "react";
+ import {
+     collection,
+     onSnapshot,
+     query,
+     orderBy,
+     addDoc,
++    doc,
+ } from "firebase/firestore";
+ import { db } from "@/lib/firebase";
+ import { useAuth } from "@/lib/useAuth";
+ import ActionsAccordion from "./special_functions/ActionsAccordion";
++import { allocateChamaFunds } from "@/lib/financeOperations";
++import { repairLegacyChamaLedger } from "@/lib/repairLegacyChamaLedger";
+ 
+ /* =======================
+    Types
+@@ -65,11 +68,13 @@ export default function ChamaTab() {
+     const [newChamaName, setNewChamaName] = useState("");
+     const [newChamaNote, setNewChamaNote] = useState("");
+     const [creatingChama, setCreatingChama] = useState(false);
++    const [repairingLegacy, setRepairingLegacy] = useState(false);
+ 
+ 
+     const [amount, setAmount] = useState("");
+     const [note, setNote] = useState("");
+     const [loading, setLoading] = useState(false);
++    const pendingAllocationId = useRef<string | null>(null);
+ 
+     /* =======================
+        Load Chamas
+@@ -139,50 +144,25 @@ export default function ChamaTab() {
+     const handleAllocate = async () => {
+         if (!user) return;
+         if (!selectedChamaId) {
+-            alert("Select a chama.");
++            alert('Select a Chama.');
+             return;
+         }
+-
+         const value = Number(amount);
+-        if (!value || value <= 0) {
+-            alert("Invalid amount.");
+-            return;
+-        }
+-
+-        if (value > unallocatedBalance) {
+-            alert("Insufficient unallocated funds.");
++        if (!Number.isFinite(value) || value <= 0) {
++            alert('Enter an amount greater than zero.');
+             return;
+         }
+-
+         setLoading(true);
+-
+         try {
+-            const baseRef = collection(db, "users", user.uid, "chama_ledger");
+-
+-            // Withdraw from unallocated
+-            await addDoc(baseRef, {
+-                chamaId: null,
+-                type: "payout",
+-                amount: value,
+-                timestamp: Date.now(),
+-                source: "manual",
+-                note: `Allocated to chama`,
+-            });
+-
+-            // Deposit into selected chama
+-            await addDoc(baseRef, {
+-                chamaId: selectedChamaId,
+-                type: "contribution",
+-                amount: value,
+-                timestamp: Date.now(),
+-                source: "manual",
+-                note,
+-            });
+-
+-            setAmount("");
+-            setNote("");
+-        } catch {
+-            alert("Allocation failed.");
++            if (!pendingAllocationId.current) {
++                pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
++            }
++            await allocateChamaFunds(user.uid, pendingAllocationId.current, selectedChamaId, value, note);
++            pendingAllocationId.current = null;
++            setAmount('');
++            setNote('');
++        } catch (error) {
++            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
+         } finally {
+             setLoading(false);
+         }
+@@ -231,6 +211,29 @@ export default function ChamaTab() {
+ 
+ 
+             <ActionsAccordion />
++            <div className="flex justify-end">
++                <button
++                    type="button"
++                    disabled={repairingLegacy || !user}
++                    onClick={async () => {
++                        if (!user || repairingLegacy) return;
++                        const confirmed = confirm('This will remove only historical Chama ledger entries linked to existing transactions whose category is not “Chama Contribution”, then recalculate the unallocated Chama balance. Entries without a matching transaction will be left untouched. Continue?');
++                        if (!confirmed) return;
++                        setRepairingLegacy(true);
++                        try {
++                            const count = await repairLegacyChamaLedger(user.uid);
++                            alert(count ? `Repaired ${count} incorrect historical Chama ledger entr${count === 1 ? 'y' : 'ies'}.` : 'No incorrectly categorized historical Chama ledger entries were found.');
++                        } catch (error) {
++                            alert(error instanceof Error ? error.message : 'Unable to repair historical Chama ledger entries.');
++                        } finally {
++                            setRepairingLegacy(false);
++                        }
++                    }}
++                    className="text-sm border border-amber-600 text-amber-200 hover:bg-amber-900/30 rounded px-3 py-2 disabled:opacity-50"
++                >
++                    {repairingLegacy ? 'Checking ledger…' : 'Repair legacy Chama entries'}
++                </button>
++            </div>
+             {/* ===== Summary Cards ===== */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div
+diff --git a/components/DifferencesTab.tsx b/components/DifferencesTab.tsx
+index acdd91d..6a96ec6 100644
+--- a/components/DifferencesTab.tsx
++++ b/components/DifferencesTab.tsx
+@@ -1,15 +1,16 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import { useEffect, useState, useRef } from "react";
+ import {
+     collection,
+     onSnapshot,
+     query,
+     orderBy,
+-    addDoc,
++    doc,
+ } from "firebase/firestore";
+ import { db } from "@/lib/firebase";
+ import { useAuth } from "@/lib/useAuth";
++import { withdrawFromLedger } from "@/lib/financeOperations";
+ 
+ interface unallocatedRecord {
+     id: string;
+@@ -36,6 +37,7 @@ export default function DifferencesTab() {
+     const [note, setNote] = useState("");
+     const [loading, setLoading] = useState(false);
+     const [loadingLedger, setLoadingLedger] = useState(false);
++    const pendingWithdrawalId = useRef<string | null>(null);
+ 
+     // Load ledger
+     useEffect(() => {
+@@ -75,34 +77,24 @@ export default function DifferencesTab() {
+ 
+     // Handle withdrawal
+     const handleWithdraw = async () => {
+-        if (!withdrawAmount || Number(withdrawAmount) <= 0) {
+-            alert("Enter a valid amount.");
++        const value = Number(withdrawAmount);
++        if (!Number.isFinite(value) || value <= 0) {
++            alert('Enter an amount greater than zero.');
+             return;
+         }
+-        if (Number(withdrawAmount) > available) {
+-            alert("You do not have enough unallocated funds.");
+-            return;
+-        }
+-
++        if (!user) return;
+         setLoading(true);
+         try {
+-            if (!user) return;
+-
+-            await addDoc(collection(db, "users", user.uid, "unallocated_ledger"), {
+-                type: "withdrawal",
+-                amount: Number(withdrawAmount),
+-                timestamp: Date.now(),
+-                budgetMonth: "",
+-                source: "manual-withdrawal",
+-                note: note || "",
+-                relatedTransactionId: "",
+-            });
+-
+-            setWithdrawAmount("");
+-            setNote("");
+-            setLoading(false);
+-        } catch {
+-            alert("Failed to record withdrawal");
++            if (!pendingWithdrawalId.current) {
++                pendingWithdrawalId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
++            }
++            await withdrawFromLedger(user.uid, 'unallocated', pendingWithdrawalId.current, value, note);
++            pendingWithdrawalId.current = null;
++            setWithdrawAmount('');
++            setNote('');
++        } catch (error) {
++            alert(error instanceof Error ? error.message : 'Failed to record withdrawal. Retry to safely resume the same operation.');
++        } finally {
+             setLoading(false);
+         }
+     };
+diff --git a/components/LayoutControllerClient.tsx b/components/LayoutControllerClient.tsx
+index c12d934..2735c74 100644
+--- a/components/LayoutControllerClient.tsx
++++ b/components/LayoutControllerClient.tsx
+@@ -1,38 +1,52 @@
+ 'use client';
+ 
+-import React, { useState } from 'react';
+-import { usePathname } from 'next/navigation';
+-import { AuthProvider } from '@/lib/useAuth';
++import React, { useEffect, useState } from 'react';
++import { usePathname, useRouter } from 'next/navigation';
++import { AuthProvider, useAuth } from '@/lib/useAuth';
+ import Sidebar from '@/components/Sidebar';
+ import Topbar from '@/components/Topbar';
+ 
+-export default function LayoutControllerClient({
+-  children,
+-}: {
+-  children: React.ReactNode;
+-}) {
++function LayoutContent({ children }: { children: React.ReactNode }) {
+   const pathname = usePathname();
++  const router = useRouter();
++  const { user, loading } = useAuth();
+   const isAuthPage = pathname === '/login' || pathname === '/signup';
+   const [sidebarOpen, setSidebarOpen] = useState(false);
+ 
++  useEffect(() => {
++    if (!isAuthPage && !loading && !user) router.replace('/login');
++  }, [isAuthPage, loading, user, router]);
++
++  if (isAuthPage) {
++    return (
++      <main className="flex items-center justify-center min-h-screen w-full bg-transparent">
++        {children}
++      </main>
++    );
++  }
++
++  // Do not render protected application content until Firebase has resolved
++  // the initial persisted session and confirmed that a user is signed in.
++  if (loading) {
++    return <main className="flex min-h-screen items-center justify-center text-gray-500">Checking your session...</main>;
++  }
++  if (!user) return null;
++
+   return (
+-    <AuthProvider>
+-      {isAuthPage ? (
+-        <main className="flex items-center justify-center min-h-screen w-full bg-transparent">
+-          {children}
+-        </main>
+-      ) : (
+-        <div className="flex min-h-screen w-full">
+-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
++    <div className="flex min-h-screen w-full">
++      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
++      <div className="flex-1 flex flex-col md:ml-60">
++        <Topbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
++        <main className="flex-1 bg-gray-50 p-4 overflow-y-auto bg-transparent">{children}</main>
++      </div>
++    </div>
++  );
++}
+ 
+-          <div className="flex-1 flex flex-col md:ml-60">
+-            <Topbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+-            <main className="flex-1 bg-gray-50 p-4 overflow-y-auto bg-transparent">
+-              {children}
+-            </main>
+-          </div>
+-        </div>
+-      )}
++export default function LayoutControllerClient({ children }: { children: React.ReactNode }) {
++  return (
++    <AuthProvider>
++      <LayoutContent>{children}</LayoutContent>
+     </AuthProvider>
+   );
+ }
+diff --git a/components/SavingsTab.tsx b/components/SavingsTab.tsx
+index 53e7a47..3ec01a1 100644
+--- a/components/SavingsTab.tsx
++++ b/components/SavingsTab.tsx
+@@ -1,15 +1,16 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import { useEffect, useState, useRef } from "react";
+ import {
+   collection,
+   onSnapshot,
+   query,
+   orderBy,
+-  addDoc,
++  doc,
+ } from "firebase/firestore";
+ import { db } from "@/lib/firebase";
+ import { useAuth } from "@/lib/useAuth";
++import { withdrawFromLedger } from "@/lib/financeOperations";
+ 
+ interface savingsRecord {
+   id: string;
+@@ -28,6 +29,7 @@ export default function SavingsTab() {
+     const [note, setNote] = useState("");
+     const [loading, setLoading] = useState(false);
+     const [loadingLedger, setLoadingLedger] = useState(false);
++    const pendingWithdrawalId = useRef<string | null>(null);
+ 
+     const savingsRef = user
+     ? collection(db, "users", user.uid, "savings_ledger")
+@@ -81,39 +83,28 @@ export default function SavingsTab() {
+   
+     // Handle withdrawal
+     const handleWithdraw = async () => {
+-      if (!withdrawAmount || Number(withdrawAmount) <= 0) {
+-        alert("Enter a valid amount.");
++      const value = Number(withdrawAmount);
++      if (!Number.isFinite(value) || value <= 0) {
++        alert('Enter an amount greater than zero.');
+         return;
+       }
+-      if (Number(withdrawAmount) > available) {
+-        alert("You do not have enough savings to withdraw this amount.");
+-        return;
+-      }
+-  
++      if (!user) return;
+       setLoading(true);
+       try {
+-
+-        if (!user) return null;
+-
+-        await addDoc(collection(db, "users", user.uid, "savings_ledger"), {
+-          type: "withdrawal",
+-          amount: Number(withdrawAmount),
+-          timestamp: Date.now(),
+-          source: "manual",
+-          note: note || "",
+-          relatedTransactionId: "",
+-        });
+-  
+-        setWithdrawAmount("");
+-        setNote("");
+-        setLoading(false);
+-      } catch (e) {
+-        console.error(e);
+-        alert("Failed to record withdrawal.");
++        if (!pendingWithdrawalId.current) {
++          pendingWithdrawalId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
++        }
++        await withdrawFromLedger(user.uid, 'savings', pendingWithdrawalId.current, value, note);
++        pendingWithdrawalId.current = null;
++        setWithdrawAmount('');
++        setNote('');
++      } catch (error) {
++        alert(error instanceof Error ? error.message : 'Failed to record withdrawal. Retry to safely resume the same operation.');
++      } finally {
+         setLoading(false);
+       }
+     };
+-  
++
+     return (
+       <div className="space-y-6">
+         {loadingLedger ? (
+diff --git a/components/Topbar.tsx b/components/Topbar.tsx
+index 0f449b4..b780737 100644
+--- a/components/Topbar.tsx
++++ b/components/Topbar.tsx
+@@ -1,6 +1,7 @@
+ 'use client';
+ 
+ import { useState } from 'react';
++import { useRouter } from 'next/navigation';
+ import { signOut } from 'firebase/auth';
+ import { auth } from '@/lib/firebase';
+ import { useAuth } from '@/lib/useAuth';
+@@ -12,8 +13,19 @@ export default function Topbar({
+   onToggleSidebar?: () => void;
+ }) {
+   const [open, setOpen] = useState(false);
++  const router = useRouter();
+   const { user } = useAuth();
+ 
++  async function handleSignOut() {
++    try {
++      await signOut(auth);
++      setOpen(false);
++      router.replace('/login');
++    } catch {
++      alert('Unable to sign out. Please try again.');
++    }
++  }
++
+   // Utility to truncate long emails
+   const truncateEmail = (email: string | null | undefined, maxLength = 20) => {
+     if (!email) return '';
+@@ -54,7 +66,7 @@ export default function Topbar({
+         {open && (
+           <div className="absolute right-0 mt-2 w-48 bg-white/80 backdrop-blur-md rounded-md shadow-md border z-10">
+             <button
+-              onClick={() => signOut(auth)}
++              onClick={handleSignOut}
+               className="flex items-center gap-2 w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
+             >
+               <FiLogOut className="text-gray-500" /> Sign Out
+diff --git a/components/special_functions/AllocateChamaFunds.tsx b/components/special_functions/AllocateChamaFunds.tsx
+index 555ae0e..944e549 100644
+--- a/components/special_functions/AllocateChamaFunds.tsx
++++ b/components/special_functions/AllocateChamaFunds.tsx
+@@ -1,15 +1,16 @@
+ "use client";
+ 
+-import { useEffect, useState } from "react";
++import { useEffect, useState, useRef } from "react";
+ import {
+     collection,
+     onSnapshot,
+     query,
+     orderBy,
+-    addDoc,
++    doc,
+ } from "firebase/firestore";
+ import { db } from "@/lib/firebase";
+ import { useAuth } from "@/lib/useAuth";
++import { allocateChamaFunds } from "@/lib/financeOperations";
+ 
+ interface Chama {
+     id: string;
+@@ -40,6 +41,7 @@ export default function AllocateFunds() {
+     const [amount, setAmount] = useState("");
+     const [note, setNote] = useState("");
+     const [loading, setLoading] = useState(false);
++    const pendingAllocationId = useRef<string | null>(null);
+ 
+     /* =======================
+        Load Chamas
+@@ -102,57 +104,30 @@ export default function AllocateFunds() {
+     const handleAllocate = async () => {
+         if (!user) return;
+         if (!selectedChamaId) {
+-            alert("Select a chama.");
++            alert('Select a Chama.');
+             return;
+         }
+-
+         const value = Number(amount);
+-        if (!value || value <= 0) {
+-            alert("Invalid amount.");
+-            return;
+-        }
+-
+-        if (value > unallocatedBalance) {
+-            alert("Insufficient unallocated funds.");
++        if (!Number.isFinite(value) || value <= 0) {
++            alert('Enter an amount greater than zero.');
+             return;
+         }
+-
+         setLoading(true);
+-
+         try {
+-            const baseRef = collection(db, "users", user.uid, "chama_ledger");
+-
+-            // Withdraw from unallocated
+-            await addDoc(baseRef, {
+-                chamaId: null,
+-                type: "payout",
+-                amount: value,
+-                timestamp: Date.now(),
+-                source: "manual",
+-                note: `Allocated to chama`,
+-            });
+-
+-            // Deposit into selected chama
+-            await addDoc(baseRef, {
+-                chamaId: selectedChamaId,
+-                type: "contribution",
+-                amount: value,
+-                timestamp: Date.now(),
+-                source: "manual",
+-                note,
+-            });
+-
+-            setAmount("");
+-            setNote("");
+-        } catch {
+-            alert("Allocation failed.");
++            if (!pendingAllocationId.current) {
++                pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
++            }
++            await allocateChamaFunds(user.uid, pendingAllocationId.current, selectedChamaId, value, note);
++            pendingAllocationId.current = null;
++            setAmount('');
++            setNote('');
++        } catch (error) {
++            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
+         } finally {
+             setLoading(false);
+         }
+     };
+ 
+-    
+-
+     return (     
+         <div className="p-4 bg-gray-900 rounded-lg space-y-3">
+                 <h3 className="font-semibold text-blue-300">
+diff --git a/firebase.json b/firebase.json
+new file mode 100644
+index 0000000..90a63e9
+--- /dev/null
++++ b/firebase.json
+@@ -0,0 +1,16 @@
++{
++  "firestore": {
++    "rules": "firestore.rules"
++  },
++  "emulators": {
++    "firestore": {
++      "port": 8080
++    },
++    "auth": {
++      "port": 9099
++    },
++    "ui": {
++      "enabled": false
++    }
++  }
++}
+diff --git a/firestore.rules b/firestore.rules
+new file mode 100644
+index 0000000..191b5e9
+--- /dev/null
++++ b/firestore.rules
+@@ -0,0 +1,15 @@
++rules_version = '2';
++service cloud.firestore {
++  match /databases/{database}/documents {
++    // Users can access only documents under their own UID. All paths not
++    // explicitly covered by this owner-scoped rule are denied below.
++    match /users/{userId}/{document=**} {
++      allow read, write: if request.auth != null && request.auth.uid == userId;
++    }
++
++    // Default deny for every other collection/path.
++    match /{document=**} {
++      allow read, write: if false;
++    }
++  }
++}
+diff --git a/lib/financeOperations.ts b/lib/financeOperations.ts
+new file mode 100644
+index 0000000..2d1d692
+--- /dev/null
++++ b/lib/financeOperations.ts
+@@ -0,0 +1,326 @@
++import {
++  collection,
++  doc,
++  getDoc,
++  getDocs,
++  query,
++  runTransaction,
++  serverTimestamp,
++  where,
++  type DocumentReference,
++} from 'firebase/firestore';
++import { db } from '@/lib/firebase';
++import { getLedgerEffectForCategory, calculateMonthMetrics } from '@/lib/financeRules.mjs';
++
++type LedgerKind = 'savings' | 'unallocated' | 'chama-unallocated';
++type LedgerRow = Record<string, any>;
++
++function validPositiveAmount(value: number) {
++  if (!Number.isFinite(value) || value <= 0) throw new Error('Enter a valid amount greater than zero.');
++}
++
++function balanceRefFor(userId: string, kind: LedgerKind) {
++  return doc(db, 'users', userId, 'account_balances', kind);
++}
++
++function ledgerCollectionFor(userId: string, kind: LedgerKind) {
++  const name = kind === 'savings' ? 'savings_ledger' : kind === 'unallocated' ? 'unallocated_ledger' : 'chama_ledger';
++  return collection(db, 'users', userId, name);
++}
++
++function balanceFromRows(kind: LedgerKind, rows: LedgerRow[]) {
++  if (kind === 'savings' || kind === 'unallocated') {
++    return rows.reduce((sum, row) => sum + (row.type === 'deposit' ? Number(row.amount || 0) : row.type === 'withdrawal' ? -Number(row.amount || 0) : 0), 0);
++  }
++  return rows.reduce((sum, row) => sum + (row.type === 'contribution' ? Number(row.amount || 0) : row.type === 'payout' ? -Number(row.amount || 0) : 0), 0);
++}
++
++async function getStartingBalance(balanceSnapshot: any) {
++  if (!balanceSnapshot.exists()) throw new Error('The balance account is still initializing. Please retry the operation.');
++  return Number(balanceSnapshot.data().balance || 0);
++}
++
++/**
++ * Initializes a per-user aggregate from the current ledger exactly once. Every
++ * app operation that mutates that ledger calls this first. After initialization,
++ * balance documents serialize concurrent withdrawals/allocations in transactions.
++ */
++export async function ensureBalanceInitialized(userId: string, kind: LedgerKind) {
++  const balanceRef = balanceRefFor(userId, kind);
++  if ((await getDoc(balanceRef)).exists()) return;
++
++  const ledgerRef = ledgerCollectionFor(userId, kind);
++  const ledgerQuery = kind === 'chama-unallocated'
++    ? query(ledgerRef, where('chamaId', '==', null))
++    : query(ledgerRef);
++  const ledgerSnapshot = await getDocs(ledgerQuery);
++  const calculatedBalance = balanceFromRows(kind, ledgerSnapshot.docs.map((entry) => entry.data()));
++
++  await runTransaction(db, async (transaction) => {
++    const current = await transaction.get(balanceRef);
++    if (!current.exists()) transaction.set(balanceRef, { balance: calculatedBalance, updatedAt: serverTimestamp() });
++  });
++}
++
++async function ensureChamaBalanceInitialized(userId: string, chamaId: string) {
++  const balanceRef = doc(db, 'users', userId, 'account_balances', `chama-${chamaId}`);
++  if ((await getDoc(balanceRef)).exists()) return;
++  const ledgerRef = collection(db, 'users', userId, 'chama_ledger');
++  const snapshot = await getDocs(query(ledgerRef, where('chamaId', '==', chamaId)));
++  const calculatedBalance = balanceFromRows('chama-unallocated', snapshot.docs.map((entry) => entry.data()));
++  await runTransaction(db, async (transaction) => {
++    const current = await transaction.get(balanceRef);
++    if (!current.exists()) transaction.set(balanceRef, { balance: calculatedBalance, updatedAt: serverTimestamp() });
++  });
++}
++
++function ledgerEntryRef(userId: string, kind: LedgerKind, id: string): DocumentReference {
++  return doc(ledgerCollectionFor(userId, kind), id);
++}
++
++/** Creates a transaction and its category-specific ledger effect atomically. */
++export async function createTransactionWithLedger(
++  userId: string,
++  transactionId: string,
++  input: {
++    budgetMonth: string;
++    dateOfTransaction: string;
++    category: string;
++    amount: number;
++    paidThrough: string;
++    note?: string;
++  },
++) {
++  validPositiveAmount(Number(input.amount));
++  if (!/^\d{4}-\d{2}$/.test(input.budgetMonth)) throw new Error('Select a valid budget month.');
++  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.dateOfTransaction)) throw new Error('Select a valid transaction date.');
++  if (!input.category?.trim()) throw new Error('Select a category.');
++
++  const txRef = doc(db, 'users', userId, 'transactions', transactionId);
++  const budgetRef = doc(db, 'users', userId, 'budgets', input.budgetMonth);
++  const effect = getLedgerEffectForCategory(input.category);
++  const kind: LedgerKind | null = effect === 'savings-deposit'
++    ? 'savings'
++    : effect === 'chama-unallocated-contribution'
++      ? 'chama-unallocated'
++      : null;
++  if (kind) await ensureBalanceInitialized(userId, kind);
++
++  await runTransaction(db, async (transaction) => {
++    const existingTx = await transaction.get(txRef);
++    if (existingTx.exists()) {
++      const existing = existingTx.data();
++      if (existing.category !== input.category || Number(existing.amount) !== Number(input.amount) || existing.budgetMonth !== input.budgetMonth || existing.dateOfTransaction !== input.dateOfTransaction || existing.paidThrough !== input.paidThrough || (existing.note || '') !== (input.note || '')) {
++        throw new Error('This transaction request ID was already used for different details. Start a new transaction instead.');
++      }
++      return;
++    }
++
++    const budgetSnapshot = await transaction.get(budgetRef);
++    if (!budgetSnapshot.exists()) throw new Error('The selected budget no longer exists.');
++    const budget = budgetSnapshot.data();
++    if (budget.closed) throw new Error('This budget is closed and cannot accept transactions.');
++    const balanceRef = kind ? balanceRefFor(userId, kind) : null;
++    const balanceSnapshot = balanceRef ? await transaction.get(balanceRef) : null;
++    const startingBalance = balanceSnapshot ? await getStartingBalance(balanceSnapshot) : 0;
++
++    transaction.set(txRef, {
++      ...input,
++      amount: Number(input.amount),
++      dateOfTransaction: input.dateOfTransaction,
++      createdAt: serverTimestamp(),
++    });
++    // Updating the budget revision serializes transaction creation against the
++    // close-budget operation, preventing closure from missing a concurrent entry.
++    transaction.update(budgetRef, {
++      transactionRevision: Number(budget.transactionRevision || 0) + 1,
++      updatedAt: serverTimestamp(),
++    });
++
++    if (kind === 'savings') {
++      transaction.set(ledgerEntryRef(userId, 'savings', `transaction-${transactionId}`), {
++        type: 'deposit', amount: Number(input.amount), timestamp: Date.now(), source: 'transaction',
++        relatedTransactionId: transactionId, note: input.note || '', operationId: `transaction-${transactionId}`,
++      });
++      transaction.set(balanceRefFor(userId, 'savings'), { balance: startingBalance + Number(input.amount), updatedAt: serverTimestamp() });
++    } else if (kind === 'chama-unallocated') {
++      transaction.set(ledgerEntryRef(userId, 'chama-unallocated', `transaction-${transactionId}`), {
++        chamaId: null, type: 'contribution', amount: Number(input.amount), timestamp: Date.now(),
++        budgetMonth: input.budgetMonth, source: 'transaction', relatedTransactionId: transactionId,
++        note: input.note || 'Chama contribution', operationId: `transaction-${transactionId}`,
++      });
++      transaction.set(balanceRefFor(userId, 'chama-unallocated'), { balance: startingBalance + Number(input.amount), updatedAt: serverTimestamp() });
++    }
++  });
++}
++
++/** Atomically records a savings/unallocated withdrawal with an idempotency key. */
++export async function withdrawFromLedger(
++  userId: string,
++  kind: 'savings' | 'unallocated',
++  operationId: string,
++  amount: number,
++  note = '',
++) {
++  validPositiveAmount(Number(amount));
++  await ensureBalanceInitialized(userId, kind);
++  const balanceRef = balanceRefFor(userId, kind);
++  const operationRef = doc(db, 'users', userId, 'operations', operationId);
++  const entryRef = ledgerEntryRef(userId, kind, operationId);
++
++  await runTransaction(db, async (transaction) => {
++    const operationSnapshot = await transaction.get(operationRef);
++    if (operationSnapshot.exists()) {
++      const existing = operationSnapshot.data();
++      if (existing.type !== `${kind}-withdrawal` || Number(existing.amount) !== Number(amount)) throw new Error('This operation ID was already used for different withdrawal details.');
++      return;
++    }
++    const balanceSnapshot = await transaction.get(balanceRef);
++    const currentBalance = await getStartingBalance(balanceSnapshot);
++    if (Number(amount) > currentBalance) throw new Error(`Insufficient ${kind === 'savings' ? 'savings' : 'unallocated'} funds.`);
++
++    transaction.set(entryRef, { type: 'withdrawal', amount: Number(amount), timestamp: Date.now(), source: 'manual-withdrawal', note, relatedTransactionId: '', operationId });
++    transaction.set(balanceRef, { balance: currentBalance - Number(amount), updatedAt: serverTimestamp() });
++    transaction.set(operationRef, { type: `${kind}-withdrawal`, amount: Number(amount), createdAt: serverTimestamp() });
++  });
++}
++
++/** Atomically moves money from the unallocated Chama pool into one Chama. */
++export async function allocateChamaFunds(
++  userId: string,
++  operationId: string,
++  chamaId: string,
++  amount: number,
++  note = '',
++) {
++  validPositiveAmount(Number(amount));
++  if (!chamaId) throw new Error('Select a Chama.');
++  await ensureBalanceInitialized(userId, 'chama-unallocated');
++  await ensureChamaBalanceInitialized(userId, chamaId);
++
++  const base = collection(db, 'users', userId, 'chama_ledger');
++  const operationRef = doc(db, 'users', userId, 'operations', operationId);
++  const chamaRef = doc(db, 'users', userId, 'chamas', chamaId);
++  const unallocatedBalanceRef = balanceRefFor(userId, 'chama-unallocated');
++  const chamaBalanceRef = doc(db, 'users', userId, 'account_balances', `chama-${chamaId}`);
++  const withdrawalRef = doc(base, `${operationId}-out`);
++  const contributionRef = doc(base, `${operationId}-in`);
++
++  await runTransaction(db, async (transaction) => {
++    const operationSnapshot = await transaction.get(operationRef);
++    if (operationSnapshot.exists()) {
++      const existing = operationSnapshot.data();
++      if (existing.type !== 'chama-allocation' || existing.chamaId !== chamaId || Number(existing.amount) !== Number(amount)) throw new Error('This operation ID was already used for different allocation details.');
++      return;
++    }
++    const chamaSnapshot = await transaction.get(chamaRef);
++    if (!chamaSnapshot.exists()) throw new Error('The selected Chama no longer exists.');
++    const unallocatedSnapshot = await transaction.get(unallocatedBalanceRef);
++    const chamaBalanceSnapshot = await transaction.get(chamaBalanceRef);
++    const unallocatedBalance = await getStartingBalance(unallocatedSnapshot);
++    const chamaBalance = await getStartingBalance(chamaBalanceSnapshot);
++    if (Number(amount) > unallocatedBalance) throw new Error('Insufficient unallocated Chama funds.');
++
++    transaction.set(withdrawalRef, { chamaId: null, type: 'payout', amount: Number(amount), timestamp: Date.now(), source: 'manual', note: `Allocated to Chama ${chamaId}`, operationId });
++    transaction.set(contributionRef, { chamaId, type: 'contribution', amount: Number(amount), timestamp: Date.now(), source: 'manual', note, operationId });
++    transaction.set(unallocatedBalanceRef, { balance: unallocatedBalance - Number(amount), updatedAt: serverTimestamp() });
++    transaction.set(chamaBalanceRef, { balance: chamaBalance + Number(amount), updatedAt: serverTimestamp() });
++    transaction.set(operationRef, { type: 'chama-allocation', chamaId, amount: Number(amount), createdAt: serverTimestamp() });
++  });
++}
++
++/** One shared, idempotent close-budget operation for every screen. */
++export async function closeBudgetAndTransferRemainder(userId: string, month: string) {
++  const budgetRef = doc(db, 'users', userId, 'budgets', month);
++  const transferRef = doc(db, 'users', userId, 'unallocated_ledger', `budget-close-${month}`);
++  const balanceRef = balanceRefFor(userId, 'unallocated');
++  const txQuery = query(collection(db, 'users', userId, 'transactions'), where('budgetMonth', '==', month));
++  await ensureBalanceInitialized(userId, 'unallocated');
++
++  // The Web SDK transaction reads document references, not query snapshots.
++  // Pair an outside month query with transactionRevision on the budget document;
++  // all new transaction writes increment that revision in the same transaction.
++  for (let attempt = 0; attempt < 5; attempt += 1) {
++    const preflightBudget = await getDoc(budgetRef);
++    if (!preflightBudget.exists()) throw new Error('The selected budget does not exist.');
++    const preflightData = preflightBudget.data();
++    if (preflightData.closed) {
++      const priorTransfer = await getDoc(transferRef);
++      if (priorTransfer.exists() || typeof preflightData.closureTransferAmount === 'number') return;
++      throw new Error('This budget is already closed. Please reconcile its previous closure before retrying.');
++    }
++    const observedRevision = Number(preflightData.transactionRevision || 0);
++    const transactionSnapshot = await getDocs(txQuery);
++    const monthTransactions = transactionSnapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }));
++
++    try {
++      await runTransaction(db, async (transaction) => {
++        const budgetSnapshot = await transaction.get(budgetRef);
++        if (!budgetSnapshot.exists()) throw new Error('The selected budget does not exist.');
++        const budget = budgetSnapshot.data();
++        const transferSnapshot = await transaction.get(transferRef);
++        if (budget.closed) {
++          if (transferSnapshot.exists() || typeof budget.closureTransferAmount === 'number') return;
++          throw new Error('This budget is already closed. Please reconcile its previous closure before retrying.');
++        }
++        if (Number(budget.transactionRevision || 0) !== observedRevision) throw new Error('STALE_BUDGET_SNAPSHOT');
++        const balanceSnapshot = await transaction.get(balanceRef);
++        const currentUnallocated = await getStartingBalance(balanceSnapshot);
++        const totalBudget = Number(budget.total || 0);
++        const metrics = calculateMonthMetrics(monthTransactions, month, totalBudget);
++        const remaining = Math.max(0, metrics.remainingBudget);
++
++        transaction.update(budgetRef, {
++          closed: true,
++          closedAt: serverTimestamp(),
++          closureTransferAmount: remaining,
++          transactionRevision: observedRevision + 1,
++        });
++        if (remaining > 0) {
++          transaction.set(transferRef, {
++            type: 'deposit', amount: remaining, timestamp: Date.now(), budgetMonth: month,
++            source: 'budget-close', note: `Remaining balance from ${month}`, relatedTransactionId: '',
++            operationId: `budget-close-${month}`,
++          });
++          transaction.set(balanceRef, { balance: currentUnallocated + remaining, updatedAt: serverTimestamp() });
++        }
++      });
++      return;
++    } catch (error) {
++      if (error instanceof Error && error.message === 'STALE_BUDGET_SNAPSHOT' && attempt < 4) continue;
++      throw error;
++    }
++  }
++  throw new Error('Transactions are changing too quickly to close this budget safely. Please try again.');
++}
++
++/** Creates a budget and its opening unallocated deposit atomically. */
++export async function createBudgetWithOpeningFunds(
++  userId: string,
++  month: string,
++  categories: { name: string; amount: number | string; notes?: string }[],
++  totalDebited: number,
++) {
++  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Select a valid budget month.');
++  if (!Number.isFinite(totalDebited) || totalDebited < 0) throw new Error('Enter a valid total debited amount.');
++  const total = categories.reduce((sum, category) => sum + Number(category.amount || 0), 0);
++  if (categories.some((category) => !Number.isFinite(Number(category.amount)) || Number(category.amount) < 0)) throw new Error('Budget category amounts must be valid non-negative numbers.');
++  const unallocated = Math.max(totalDebited - total, 0);
++  if (unallocated > 0) await ensureBalanceInitialized(userId, 'unallocated');
++
++  const budgetRef = doc(db, 'users', userId, 'budgets', month);
++  const openingRef = doc(db, 'users', userId, 'unallocated_ledger', `budget-opening-${month}`);
++  const balanceRef = balanceRefFor(userId, 'unallocated');
++
++  await runTransaction(db, async (transaction) => {
++    const budgetSnapshot = await transaction.get(budgetRef);
++    if (budgetSnapshot.exists()) throw new Error(budgetSnapshot.data().closed ? 'This budget is already closed.' : 'A budget already exists for this month.');
++    const balanceSnapshot = unallocated > 0 ? await transaction.get(balanceRef) : null;
++    const currentUnallocated = balanceSnapshot ? await getStartingBalance(balanceSnapshot) : 0;
++    transaction.set(budgetRef, { categories, total, totalDebited, closed: false, transactionRevision: 0, createdAt: serverTimestamp() });
++    if (unallocated > 0) {
++      transaction.set(openingRef, { type: 'deposit', amount: unallocated, timestamp: Date.now(), budgetMonth: month, source: 'budget-creation', note: '', relatedTransactionId: '', operationId: `budget-opening-${month}` });
++      transaction.set(balanceRef, { balance: currentUnallocated + unallocated, updatedAt: serverTimestamp() });
++    }
++  });
++}
+diff --git a/lib/financeRules.d.mts b/lib/financeRules.d.mts
+new file mode 100644
+index 0000000..64525cf
+--- /dev/null
++++ b/lib/financeRules.d.mts
+@@ -0,0 +1,24 @@
++export type LedgerEffect = 'savings-deposit' | 'chama-unallocated-contribution' | 'none';
++
++export interface FinanceTransaction {
++  budgetMonth?: string;
++  category?: string;
++  amount?: number | string | null;
++  [key: string]: unknown;
++}
++
++export interface MonthMetrics {
++  transactions: FinanceTransaction[];
++  totalRecovered: number;
++  totalOutflows: number;
++  netSpend: number;
++  remainingBudget: number;
++  categorySpend: Record<string, number>;
++}
++
++export function getLedgerEffectForCategory(category: unknown): LedgerEffect;
++export function calculateMonthMetrics(
++  transactions: FinanceTransaction[],
++  selectedMonth: string,
++  budgetTotal?: number,
++): MonthMetrics;
+diff --git a/lib/financeRules.mjs b/lib/financeRules.mjs
+new file mode 100644
+index 0000000..2889384
+--- /dev/null
++++ b/lib/financeRules.mjs
+@@ -0,0 +1,46 @@
++/**
++ * Pure finance rules shared by application code and automated tests.
++ * Business date: dateOfTransaction (YYYY-MM-DD). `createdAt` is metadata only.
++ */
++export function getLedgerEffectForCategory(category) {
++  switch (String(category || '').trim()) {
++    case 'Savings':
++      return 'savings-deposit';
++    case 'Chama Contribution':
++      // The transaction form does not select a specific Chama, so contributions
++      // are credited to the Chama unallocated pool and can later be allocated.
++      return 'chama-unallocated-contribution';
++    case 'Money Recovered':
++    case 'Money Lost':
++    default:
++      return 'none';
++  }
++}
++
++export function calculateMonthMetrics(transactions, selectedMonth, budgetTotal = 0) {
++  const monthTransactions = (transactions || []).filter((tx) => tx.budgetMonth === selectedMonth);
++  const totalRecovered = monthTransactions
++    .filter((tx) => tx.category === 'Money Recovered')
++    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
++  const totalOutflows = monthTransactions
++    .filter((tx) => tx.category !== 'Money Recovered')
++    .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
++  const netSpend = totalOutflows - totalRecovered;
++  const categorySpend = {};
++
++  for (const tx of monthTransactions) {
++    if (tx.category === 'Money Recovered') continue;
++    const category = tx.category || 'Uncategorized';
++    categorySpend[category] = (categorySpend[category] || 0) + Number(tx.amount || 0);
++  }
++
++  const planned = Number(budgetTotal || 0);
++  return {
++    transactions: monthTransactions,
++    totalRecovered,
++    totalOutflows,
++    netSpend,
++    remainingBudget: planned - netSpend,
++    categorySpend,
++  };
++}
+diff --git a/lib/repairLegacyChamaLedger.ts b/lib/repairLegacyChamaLedger.ts
+new file mode 100644
+index 0000000..0d9c89e
+--- /dev/null
++++ b/lib/repairLegacyChamaLedger.ts
+@@ -0,0 +1,54 @@
++import { collection, doc, getDocs, query, runTransaction, serverTimestamp, where } from 'firebase/firestore';
++import { db } from '@/lib/firebase';
++import { ensureBalanceInitialized } from '@/lib/financeOperations';
++
++/**
++ * One-time, explicitly invoked repair for the historical bug that wrote a
++ * chama_ledger contribution for every transaction category. Only entries with
++ * a linked, existing transaction whose category is not "Chama Contribution"
++ * are removed. Unlinked entries and missing source transactions are left alone.
++ */
++export async function repairLegacyChamaLedger(userId: string): Promise<number> {
++  const ledgerRef = collection(db, 'users', userId, 'chama_ledger');
++  const transactionsRef = collection(db, 'users', userId, 'transactions');
++  const balanceRef = doc(db, 'users', userId, 'account_balances', 'chama-unallocated');
++
++  await ensureBalanceInitialized(userId, 'chama-unallocated');
++  const [ledgerSnapshot, transactionSnapshot] = await Promise.all([
++    getDocs(query(ledgerRef, where('chamaId', '==', null))),
++    getDocs(query(transactionsRef)),
++  ]);
++  const transactionsById = new Map<string, Record<string, any>>(
++    transactionSnapshot.docs.map((item) => [item.id, item.data() as Record<string, any>]),
++  );
++  const candidates = ledgerSnapshot.docs.filter((entry) => {
++    const data = entry.data();
++    if (data.source !== 'transaction' || data.type !== 'contribution' || !data.relatedTransactionId) return false;
++    const sourceTransaction = transactionsById.get(String(data.relatedTransactionId));
++    return Boolean(sourceTransaction) && sourceTransaction?.category !== 'Chama Contribution';
++  });
++
++  if (candidates.length > 499) {
++    throw new Error(`Found ${candidates.length} entries to repair. This exceeds the safe one-transaction limit; split the repair into reviewed smaller batches.`);
++  }
++  if (candidates.length === 0) return 0;
++
++  return runTransaction(db, async (transaction) => {
++    const balanceSnapshot = await transaction.get(balanceRef);
++    const candidateSnapshots = [];
++    for (const candidate of candidates) candidateSnapshots.push(await transaction.get(candidate.ref));
++    const currentBalance = Number(balanceSnapshot.data()?.balance || 0);
++    let adjustment = 0;
++    candidateSnapshots.forEach((snapshot) => {
++      if (!snapshot.exists()) return;
++      const row = snapshot.data();
++      if (row.type === 'contribution') adjustment -= Number(row.amount || 0);
++      if (row.type === 'payout') adjustment += Number(row.amount || 0);
++    });
++    candidateSnapshots.forEach((snapshot) => {
++      if (snapshot.exists()) transaction.delete(snapshot.ref);
++    });
++    transaction.set(balanceRef, { balance: currentBalance + adjustment, updatedAt: serverTimestamp() });
++    return candidateSnapshots.filter((snapshot) => snapshot.exists()).length;
++  });
++}
+diff --git a/lib/useAuth.tsx b/lib/useAuth.tsx
+index 861a8b7..24e7b79 100644
+--- a/lib/useAuth.tsx
++++ b/lib/useAuth.tsx
+@@ -1,23 +1,28 @@
+ 'use client';
+ 
+-import { useState, useEffect, createContext, useContext } from 'react';
++import { useState, useEffect, createContext, useContext, type ReactNode } from 'react';
+ import { onAuthStateChanged, User } from 'firebase/auth';
+ import { auth } from '@/lib/firebase';
+ 
+-const AuthContext = createContext<{ user: User | null }>({ user: null });
++const AuthContext = createContext<{ user: User | null; loading: boolean }>({ user: null, loading: true });
+ 
+-export function AuthProvider({ children }: { children: React.ReactNode }) {
++export function AuthProvider({ children }: { children: ReactNode }) {
+   const [user, setUser] = useState<User | null>(null);
++  const [loading, setLoading] = useState(true);
+ 
+   useEffect(() => {
+     const unsubscribe = onAuthStateChanged(auth, (user) => {
+       setUser(user);
++      setLoading(false);
++    }, () => {
++      setUser(null);
++      setLoading(false);
+     });
+     return () => unsubscribe();
+   }, []);
+ 
+   return (
+-    <AuthContext.Provider value={{ user }}>{children}</AuthContext.Provider>
++    <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
+   );
+ }
+ 
+diff --git a/package.json b/package.json
+index c27b3cf..8666764 100644
+--- a/package.json
++++ b/package.json
+@@ -6,7 +6,9 @@
+     "dev": "next dev",
+     "build": "next build",
+     "start": "next start",
+-    "lint": "next lint"
++    "lint": "next lint",
++    "test": "node --test tests/*.test.mjs",
++    "test:finance": "node --test tests/financeRules.test.mjs"
+   },
+   "dependencies": {
+     "@emotion/react": "^11.14.0",
+diff --git a/tests/SECURITY_AND_AUTH_SMOKE_TESTS.md b/tests/SECURITY_AND_AUTH_SMOKE_TESTS.md
+new file mode 100644
+index 0000000..5c15a9d
+--- /dev/null
++++ b/tests/SECURITY_AND_AUTH_SMOKE_TESTS.md
+@@ -0,0 +1,40 @@
++# Security and authentication smoke tests
++
++These are staging/manual integration checks. The source archive did not include a configured Firebase Emulator test harness or browser automation dependency, so these must be run against a staging Firebase project before deployment.
++
++## Login, sign-up, and logout
++
++1. Start the app with `npm run dev` and open `http://localhost:3000/signup`.
++2. Create a unique test account. Expected: the account is created and the app redirects to `/`.
++3. Refresh `/`. Expected: the authenticated session is restored; protected content does not flash the login redirect while Firebase is initializing.
++4. Use **Sign Out** in the top-right menu. Expected: the app signs out and navigates to `/login`.
++5. Open `/transactions` while signed out. Expected: the app redirects to `/login` and does not render transaction data.
++6. Log in at `/login` with the test account. Expected: the app returns to `/`.
++7. Attempt login with an incorrect password. Expected: an error is shown and no protected page is opened.
++
++## Cross-account Firestore authorization
++
++Run this only in a staging Firebase project. Deploy `firestore.rules` to that project before testing. Do not experiment against production data.
++
++1. Create two test accounts, A and B, and record their Firebase UIDs.
++2. With account A authenticated, create and read a test document at `/users/{A_UID}/transactions/rules-test`. Expected: allowed.
++3. While authenticated as A, attempt to read `/users/{B_UID}/transactions/rules-test`. Expected: denied by Firestore security rules.
++4. While authenticated as A, attempt to create, update, or delete `/users/{B_UID}/transactions/rules-test`. Expected: each write is denied.
++5. Repeat with A and B reversed. Expected: the same isolation.
++6. Attempt to read/write a path outside `/users/{your UID}/...`. Expected: denied by the default-deny rule.
++
++Deploy rules only after reviewing the target project:
++
++```bash
++firebase deploy --only firestore:rules --project YOUR_STAGING_PROJECT_ID
++```
++
++## Financial workflow regression checks
++
++1. Add an ordinary expense. Verify no new `savings_ledger` or `chama_ledger` record is created.
++2. Add a Savings transaction. Verify exactly one savings deposit linked to the transaction.
++3. Add a Chama Contribution. Verify exactly one `chama_ledger` contribution with `chamaId: null`.
++4. Add Money Lost and Money Recovered. Verify neither creates a savings or Chama ledger movement; Money Recovered reduces net spend in monthly analysis.
++5. Try two withdrawals that individually fit the same starting balance but combined exceed it. Only the first valid operation should succeed; the second should fail after the transaction rechecks the authoritative balance.
++6. Allocate funds to a Chama and verify the unallocated payout and Chama contribution are both written, or neither is written.
++7. Close a budget from both Monthly Analysis and Monthly Summary in separate attempts. The first close should transfer the remaining amount once; the second should not create another transfer.
+diff --git a/tests/financeRules.test.mjs b/tests/financeRules.test.mjs
+new file mode 100644
+index 0000000..b4b7046
+--- /dev/null
++++ b/tests/financeRules.test.mjs
+@@ -0,0 +1,36 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { getLedgerEffectForCategory, calculateMonthMetrics } from '../lib/financeRules.mjs';
++
++test('ordinary expense does not create a savings or Chama ledger movement', () => {
++  assert.equal(getLedgerEffectForCategory('Bills & utilities'), 'none');
++});
++
++test('Savings creates only a savings deposit', () => {
++  assert.equal(getLedgerEffectForCategory('Savings'), 'savings-deposit');
++});
++
++test('Chama Contribution credits the unallocated Chama pool', () => {
++  assert.equal(getLedgerEffectForCategory('Chama Contribution'), 'chama-unallocated-contribution');
++});
++
++test('Money Lost is recorded as a budget outflow but not a ledger transfer', () => {
++  assert.equal(getLedgerEffectForCategory('Money Lost'), 'none');
++  const metrics = calculateMonthMetrics([{ budgetMonth: '2026-10', category: 'Money Lost', amount: 500 }], '2026-10', 2000);
++  assert.equal(metrics.netSpend, 500);
++  assert.deepEqual(metrics.categorySpend, { 'Money Lost': 500 });
++});
++
++test('Money Recovered reduces net spend and does not count as category spend', () => {
++  assert.equal(getLedgerEffectForCategory('Money Recovered'), 'none');
++  const metrics = calculateMonthMetrics([
++    { budgetMonth: '2026-10', category: 'Bills & utilities', amount: 1200 },
++    { budgetMonth: '2026-10', category: 'Money Recovered', amount: 200 },
++    { budgetMonth: '2026-09', category: 'Bills & utilities', amount: 9999 },
++  ], '2026-10', 2000);
++  assert.equal(metrics.totalOutflows, 1200);
++  assert.equal(metrics.totalRecovered, 200);
++  assert.equal(metrics.netSpend, 1000);
++  assert.equal(metrics.remainingBudget, 1000);
++  assert.deepEqual(metrics.categorySpend, { 'Bills & utilities': 1200 });
++});

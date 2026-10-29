@@ -1,0 +1,15 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can access only documents under their own UID. All paths not
+    // explicitly covered by this owner-scoped rule are denied below.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Default deny for every other collection/path.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

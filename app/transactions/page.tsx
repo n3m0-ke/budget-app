@@ -1,5 +1,6 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import {
   collection,
@@ -8,9 +9,10 @@ import {
   orderBy,
   where,
   getDocs,
-  addDoc,
+  doc,
 } from 'firebase/firestore';
 import { useAuth } from '@/lib/useAuth';
+import { createTransactionWithLedger } from '@/lib/financeOperations';
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -37,7 +39,13 @@ function formatDate(dateStr: string) {
 }
 
 export default function TransactionsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const pendingTransactionId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
   const [budgets, setBudgets] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [form, setForm] = useState({
@@ -94,7 +102,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (!user) return;
     const txCol = collection(db, 'users', user.uid, 'transactions');
-    const q = query(txCol, orderBy('date', 'desc'));
+    const q = query(txCol, orderBy('dateOfTransaction', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const txs: any[] = [];
       snapshot.forEach((doc) => txs.push({ id: doc.id, ...doc.data() }));
@@ -104,69 +112,31 @@ export default function TransactionsPage() {
   }, [user]);
 
   const addTransaction = async () => {
-    setLoading(true);
-  
-    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction ) {
+    if (!form.budgetMonth || !form.category || !form.amount || !form.dateOfTransaction) {
       alert('Please fill all required fields.');
-      setLoading(false);
       return;
     }
-  
-    if (!budgets.includes(form.budgetMonth)) {
-      alert("You cannot assign a transaction to a closed budget.");
-      setLoading(false);
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      alert('Enter an amount greater than zero.');
       return;
     }
-  
     if (!user) return;
-  
-    const tx = {
-      ...form,
-      amount: Number(form.amount),
-      date: new Date().toISOString(),
-    };
-  
-    try {
-      // 1. Create the transaction
-      const txRef = await addDoc(
-        collection(db, 'users', user.uid, 'transactions'),
-        tx
-      );
-  
-      // ---------------------------------------------------------
-      // 2. If category = "Savings", also create a savings ledger deposit
-      // ---------------------------------------------------------
-      if (tx.category === "Savings") {
-        await addDoc(collection(db, "users", user.uid, "savings_ledger"), {
-          type: "deposit",
-          amount: Number(tx.amount),
-          timestamp: Date.now(),
-          source: "transaction",
-          relatedTransactionId: txRef.id,
-          note: tx.note,
-        });
-      }
-      // ---------------------------------------------------------
 
-      // ---------------------------------------------------------
-      // 2. If category = "chama contribution", also create a savings ledger deposit
-      // ---------------------------------------------------------
-      await addDoc(
-        collection(db, "users", user.uid, "chama_ledger"),
-        {
-          chamaId: null,
-          type: "contribution",
-          amount: Number(tx.amount),
-          timestamp: Date.now(),
-          budgetMonth: tx.budgetMonth,
-          source: "transaction",
-          relatedTransactionId: txRef.id,
-          note: tx.note || `Payout received`
-        }
-      );
-      
-  
-      // Reset UI as before
+    setLoading(true);
+    try {
+      if (!pendingTransactionId.current) {
+        pendingTransactionId.current = doc(collection(db, 'users', user.uid, 'transactions')).id;
+      }
+      await createTransactionWithLedger(user.uid, pendingTransactionId.current, {
+        budgetMonth: form.budgetMonth,
+        dateOfTransaction: form.dateOfTransaction,
+        category: form.category,
+        amount,
+        paidThrough: form.paidThrough,
+        note: form.note,
+      });
+      pendingTransactionId.current = null;
       setForm({
         budgetMonth: '',
         dateOfTransaction: new Date().toISOString().split('T')[0],
@@ -177,16 +147,14 @@ export default function TransactionsPage() {
       });
       setCategories([]);
       setMessage('Transaction added successfully 🎉');
-      setLoading(false);
       setTimeout(() => setMessage(null), 3000);
-  
     } catch (err) {
       console.error(err);
-      alert('Failed to add transaction');
+      alert(err instanceof Error ? err.message : 'Failed to add transaction. Retry to safely resume the same operation.');
+    } finally {
       setLoading(false);
     }
   };
-  
 
   /** --- TanStack Table Setup --- */
   const columnHelper = createColumnHelper<any>();
@@ -266,6 +234,8 @@ export default function TransactionsPage() {
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 10 } },
   });
+
+  if (authLoading) return <div className="flex min-h-screen items-center justify-center text-gray-500">Checking your session...</div>;
 
   if (!user)
     return (

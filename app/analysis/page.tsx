@@ -10,10 +10,9 @@ import {
   getDocs,
   query,
   where,
-  updateDoc,
-  addDoc
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
 import Cookies from 'js-cookie';
 import { CountUp } from 'use-count-up';
 
@@ -40,7 +39,7 @@ function formatMonth(monthStr: string) {
 }
 
 export default function AnalysisPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [month, setMonth] = useState<string>('');
@@ -52,11 +51,12 @@ export default function AnalysisPage() {
   const [amountDebited, setAmountDebited] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [closed, setClosed] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   // Redirect if not logged in
   useEffect(() => {
-    if (user === null) router.push('/login');
-  }, [user, router]);
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
 
   // Load previously selected month from cookie
   useEffect(() => {
@@ -159,6 +159,7 @@ export default function AnalysisPage() {
     Math.min(100, (remainingBudget / denom) * 100)
   );
 
+  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
   if (!user) return null;
 
   let balanceColor = 'text-yellow-500'; // default
@@ -172,39 +173,21 @@ export default function AnalysisPage() {
   }
 
   async function closeBudget(month: string) {
-    if (!user) return;
-
-    const confirmSave = confirm(
-      `Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`
-    );
+    if (!user || closing) return;
+    const confirmSave = confirm(`Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`);
     if (!confirmSave) return;
-
-    const ref = doc(db, "users", user.uid, "budgets", month);
-    await updateDoc(ref, { closed: true });
-
-    if(remainingBudget > 0){
-      const ledgerRef = collection(
-        db,
-        'users',
-        user.uid,
-        'unallocated_ledger'
-      );
-
-      await addDoc(ledgerRef, {
-        type: 'deposit',
-        amount: remainingBudget,
-        timestamp: Date.now(),
-        budgetMonth: month,                 // "2025-01"
-        source: 'budget-creation',
-        note: '',
-        relatedTransactionId: '',
-      });
+    setClosing(true);
+    try {
+      await closeBudgetAndTransferRemainder(user.uid, month);
+      setClosed(true);
+      alert('Budget closed successfully. Any remaining balance was transferred once to unallocated funds.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to close budget.');
+    } finally {
+      setClosing(false);
     }
-
-    alert("Budget closed permanently. Any balance transfered to unallocated ledgers.");
-
-    setClosed(true);
   }
+
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -249,7 +232,7 @@ export default function AnalysisPage() {
 
                       {/* Close Budget */}
                       <button
-                        onClick={() => closeBudget(month)}
+                        onClick={() => closeBudget(month)} disabled={closing}
                         className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                       >
                         Close Budget

@@ -3,8 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/useAuth';
 import { useRouter } from 'next/navigation';
-import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
+import { calculateMonthMetrics } from '@/lib/financeRules.mjs';
 
 interface Budget {
   totalDebited: number;
@@ -27,17 +29,18 @@ function formatMonth(monthStr: string) {
 }
 
 export default function MonthlySummaryPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [closingMonth, setClosingMonth] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user === null) router.push('/login');
-    else loadData();
-  }, [user, router]);
+    if (!authLoading && !user) router.replace('/login');
+    else if (user) loadData();
+  }, [authLoading, user, router]);
 
 
 
@@ -67,34 +70,30 @@ export default function MonthlySummaryPage() {
 
   // Helper to calculate total spent for a month
   function getTotalSpent(month: string) {
-    // total outflows (exclude 'Money Recovered' because it's an inflow)
-    const totalOutflows = transactions
-      .filter((tx) => tx.budgetMonth === month && tx.category !== 'Money Recovered')
-      .reduce((s, tx) => s + Number(tx.amount || 0), 0);
-  
-    // total recovered (inflows)
-    const totalRecovered = transactions
-      .filter((tx) => tx.budgetMonth === month && tx.category === 'Money Recovered')
-      .reduce((s, tx) => s + Number(tx.amount || 0), 0);
-  
-    return totalOutflows - totalRecovered;
+    const budget = budgets.find((item) => item.month === month);
+    const totalBudget = (budget?.categories || []).reduce((sum, category) => sum + Number(category.amount || 0), 0);
+    return calculateMonthMetrics(transactions, month, totalBudget).netSpend;
   }
-
-  if (!user) return null;
 
   async function closeBudget(month: string) {
-    if (!user) return;
-
-    const confirmSave = confirm(
-      `Are you sure you want to close the budget for ${month}? This action cannot be undone.`
-    );
+    if (!user || closingMonth) return;
+    const confirmSave = confirm(`Are you sure you want to close the budget for ${month}? This action cannot be undone.`);
     if (!confirmSave) return;
-  
-    const ref = doc(db, "users", user.uid, "budgets", month);
-    await updateDoc(ref, { closed: true });
-  
-    alert("Budget closed successfully.");
+    setClosingMonth(month);
+    try {
+      await closeBudgetAndTransferRemainder(user.uid, month);
+      setBudgets((current) => current.map((budget) => budget.month === month ? { ...budget, closed: true } : budget));
+      alert('Budget closed successfully. Any remaining balance was transferred once to unallocated funds.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to close budget.');
+    } finally {
+      setClosingMonth(null);
+    }
   }
+
+
+  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
+  if (!user) return null;
 
   return (
     <div className="max-w-6xl mx-auto p-6">

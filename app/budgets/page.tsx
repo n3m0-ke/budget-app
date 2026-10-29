@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { db, auth } from '../../lib/firebase';
-import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { useRouter } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import { collection, doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '@/lib/useAuth';
+import { createBudgetWithOpeningFunds } from '@/lib/financeOperations';
 
 interface Category {
   name: string;
@@ -34,7 +36,8 @@ function formatMonth(monthStr: string) {
 }
 
 export default function BudgetPage() {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [month, setMonth] = useState<string>('');
   const [totalDebited, setTotalDebited] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>(
@@ -49,11 +52,8 @@ export default function BudgetPage() {
   );
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!authLoading && !user) router.replace('/login');
+  }, [authLoading, user, router]);
 
   async function handleLoadMonth(selectedMonth: string) {
     setMonth(selectedMonth);
@@ -87,57 +87,34 @@ export default function BudgetPage() {
 
   async function handleSave() {
     if (!user) return;
-
-    // Validation: all amount fields and totalDebited must be filled
     if (!month || !totalDebited || categories.some((c) => c.amount === '')) {
       alert('Please fill in all amount fields and total debited.');
       return;
     }
-
-    const confirmSave = confirm(
-      `Are you sure you want to save this budget for ${month}? It can no longer be edited.`
-    );
+    const totalDebitedNum = Number(totalDebited);
+    if (!Number.isFinite(totalDebitedNum) || totalDebitedNum < 0) {
+      alert('Enter a valid total debited amount.');
+      return;
+    }
+    const confirmSave = confirm(`Are you sure you want to save this budget for ${month}? It can no longer be edited.`);
     if (!confirmSave) return;
 
-    const budgetRef = doc(db, 'users', user.uid, 'budgets', month);
-
-    // Compute totals
-    const totalBudgeted = Number(total);
-    const totalDebitedNum = Number(totalDebited);
-    const unallocated = totalDebitedNum - totalBudgeted;
-
-    // Save the budget
-    await setDoc(budgetRef, {
-      categories,
-      total: totalBudgeted,
-      totalDebited: totalDebitedNum,
-      closed: false,
-    });
-
-    // Insert into unallocated ledger (only if > 0)
-    if (unallocated > 0) {
-      const ledgerRef = collection(
-        db,
-        'users',
-        user.uid,
-        'unallocated_ledger'
-      );
-
-      await addDoc(ledgerRef, {
-        type: 'deposit',
-        amount: unallocated,
-        timestamp: Date.now(),
-        budgetMonth: month,                 // "2025-01"
-        source: 'budget-creation',
-        note: '',
-        relatedTransactionId: '',
-      });
+    setLoading(true);
+    try {
+      await createBudgetWithOpeningFunds(user.uid, month, categories, totalDebitedNum);
+      alert('Budget saved!');
+      setMonthExists(true);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to save budget.');
+    } finally {
+      setLoading(false);
     }
-
-    alert('Budget saved!');
-    setMonthExists(true);
   }
 
+
+
+  if (authLoading) return <div className="p-6 text-gray-500">Checking your session...</div>;
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-transparent p-4 sm:p-6 md:p-8">

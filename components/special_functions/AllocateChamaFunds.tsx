@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
     collection,
     onSnapshot,
     query,
     orderBy,
-    addDoc,
+    doc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/useAuth";
+import { allocateChamaFunds } from "@/lib/financeOperations";
 
 interface Chama {
     id: string;
@@ -40,6 +41,7 @@ export default function AllocateFunds() {
     const [amount, setAmount] = useState("");
     const [note, setNote] = useState("");
     const [loading, setLoading] = useState(false);
+    const pendingAllocationId = useRef<string | null>(null);
 
     /* =======================
        Load Chamas
@@ -102,56 +104,29 @@ export default function AllocateFunds() {
     const handleAllocate = async () => {
         if (!user) return;
         if (!selectedChamaId) {
-            alert("Select a chama.");
+            alert('Select a Chama.');
             return;
         }
-
         const value = Number(amount);
-        if (!value || value <= 0) {
-            alert("Invalid amount.");
+        if (!Number.isFinite(value) || value <= 0) {
+            alert('Enter an amount greater than zero.');
             return;
         }
-
-        if (value > unallocatedBalance) {
-            alert("Insufficient unallocated funds.");
-            return;
-        }
-
         setLoading(true);
-
         try {
-            const baseRef = collection(db, "users", user.uid, "chama_ledger");
-
-            // Withdraw from unallocated
-            await addDoc(baseRef, {
-                chamaId: null,
-                type: "payout",
-                amount: value,
-                timestamp: Date.now(),
-                source: "manual",
-                note: `Allocated to chama`,
-            });
-
-            // Deposit into selected chama
-            await addDoc(baseRef, {
-                chamaId: selectedChamaId,
-                type: "contribution",
-                amount: value,
-                timestamp: Date.now(),
-                source: "manual",
-                note,
-            });
-
-            setAmount("");
-            setNote("");
-        } catch {
-            alert("Allocation failed.");
+            if (!pendingAllocationId.current) {
+                pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
+            }
+            await allocateChamaFunds(user.uid, pendingAllocationId.current, selectedChamaId, value, note);
+            pendingAllocationId.current = null;
+            setAmount('');
+            setNote('');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
         } finally {
             setLoading(false);
         }
     };
-
-    
 
     return (     
         <div className="p-4 bg-gray-900 rounded-lg space-y-3">

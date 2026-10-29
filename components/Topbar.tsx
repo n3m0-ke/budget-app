@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/lib/useAuth';
@@ -12,7 +13,18 @@ export default function Topbar({
   onToggleSidebar?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const { user } = useAuth();
+
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+      setOpen(false);
+      router.replace('/login');
+    } catch {
+      alert('Unable to sign out. Please try again.');
+    }
+  }
 
   // Utility to truncate long emails
   const truncateEmail = (email: string | null | undefined, maxLength = 20) => {
@@ -54,7 +66,7 @@ export default function Topbar({
         {open && (
           <div className="absolute right-0 mt-2 w-48 bg-white/80 backdrop-blur-md rounded-md shadow-md border z-10">
             <button
-              onClick={() => signOut(auth)}
+              onClick={handleSignOut}
               className="flex items-center gap-2 w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
             >
               <FiLogOut className="text-gray-500" /> Sign Out

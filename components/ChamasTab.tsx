@@ -1,16 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
     collection,
     onSnapshot,
     query,
     orderBy,
     addDoc,
+    doc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/useAuth";
 import ActionsAccordion from "./special_functions/ActionsAccordion";
+import { allocateChamaFunds } from "@/lib/financeOperations";
+import { repairLegacyChamaLedger } from "@/lib/repairLegacyChamaLedger";
 
 /* =======================
    Types
@@ -65,11 +68,13 @@ export default function ChamaTab() {
     const [newChamaName, setNewChamaName] = useState("");
     const [newChamaNote, setNewChamaNote] = useState("");
     const [creatingChama, setCreatingChama] = useState(false);
+    const [repairingLegacy, setRepairingLegacy] = useState(false);
 
 
     const [amount, setAmount] = useState("");
     const [note, setNote] = useState("");
     const [loading, setLoading] = useState(false);
+    const pendingAllocationId = useRef<string | null>(null);
 
     /* =======================
        Load Chamas
@@ -139,50 +144,25 @@ export default function ChamaTab() {
     const handleAllocate = async () => {
         if (!user) return;
         if (!selectedChamaId) {
-            alert("Select a chama.");
+            alert('Select a Chama.');
             return;
         }
-
         const value = Number(amount);
-        if (!value || value <= 0) {
-            alert("Invalid amount.");
+        if (!Number.isFinite(value) || value <= 0) {
+            alert('Enter an amount greater than zero.');
             return;
         }
-
-        if (value > unallocatedBalance) {
-            alert("Insufficient unallocated funds.");
-            return;
-        }
-
         setLoading(true);
-
         try {
-            const baseRef = collection(db, "users", user.uid, "chama_ledger");
-
-            // Withdraw from unallocated
-            await addDoc(baseRef, {
-                chamaId: null,
-                type: "payout",
-                amount: value,
-                timestamp: Date.now(),
-                source: "manual",
-                note: `Allocated to chama`,
-            });
-
-            // Deposit into selected chama
-            await addDoc(baseRef, {
-                chamaId: selectedChamaId,
-                type: "contribution",
-                amount: value,
-                timestamp: Date.now(),
-                source: "manual",
-                note,
-            });
-
-            setAmount("");
-            setNote("");
-        } catch {
-            alert("Allocation failed.");
+            if (!pendingAllocationId.current) {
+                pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
+            }
+            await allocateChamaFunds(user.uid, pendingAllocationId.current, selectedChamaId, value, note);
+            pendingAllocationId.current = null;
+            setAmount('');
+            setNote('');
+        } catch (error) {
+            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
         } finally {
             setLoading(false);
         }
@@ -231,6 +211,29 @@ export default function ChamaTab() {
 
 
             <ActionsAccordion />
+            <div className="flex justify-end">
+                <button
+                    type="button"
+                    disabled={repairingLegacy || !user}
+                    onClick={async () => {
+                        if (!user || repairingLegacy) return;
+                        const confirmed = confirm('This will remove only historical Chama ledger entries linked to existing transactions whose category is not “Chama Contribution”, then recalculate the unallocated Chama balance. Entries without a matching transaction will be left untouched. Continue?');
+                        if (!confirmed) return;
+                        setRepairingLegacy(true);
+                        try {
+                            const count = await repairLegacyChamaLedger(user.uid);
+                            alert(count ? `Repaired ${count} incorrect historical Chama ledger entr${count === 1 ? 'y' : 'ies'}.` : 'No incorrectly categorized historical Chama ledger entries were found.');
+                        } catch (error) {
+                            alert(error instanceof Error ? error.message : 'Unable to repair historical Chama ledger entries.');
+                        } finally {
+                            setRepairingLegacy(false);
+                        }
+                    }}
+                    className="text-sm border border-amber-600 text-amber-200 hover:bg-amber-900/30 rounded px-3 py-2 disabled:opacity-50"
+                >
+                    {repairingLegacy ? 'Checking ledger…' : 'Repair legacy Chama entries'}
+                </button>
+            </div>
             {/* ===== Summary Cards ===== */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div
