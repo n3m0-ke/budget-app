@@ -1,0 +1,30 @@
+--- a/lib/financeOperations.ts
++++ b/lib/financeOperations.ts
+@@ -10,7 +10,7 @@
+   type DocumentReference,
+ } from 'firebase/firestore';
+ import { db } from '@/lib/firebase';
+-import { getLedgerEffectForCategory, calculateMonthMetrics } from '@/lib/financeRules.mjs';
++import { getLedgerEffectForCategory, calculateMonthMetrics, type FinanceTransaction } from '@/lib/financeRules.mjs';
+ 
+ type LedgerKind = 'savings' | 'unallocated' | 'chama-unallocated';
+ type LedgerRow = Record<string, any>;
+@@ -251,7 +251,17 @@
+     }
+     const observedRevision = Number(preflightData.transactionRevision || 0);
+     const transactionSnapshot = await getDocs(txQuery);
+-    const monthTransactions = transactionSnapshot.docs.map((entry) => ({ ...entry.data(), id: entry.id }));
++    // Normalize Firestore's loosely typed DocumentData into the exact shape the
++    // pure metrics function consumes. Passing only an id (or relying on spread
++    // inference) is not a valid FinanceTransaction and can break the Vercel build.
++    const monthTransactions: FinanceTransaction[] = transactionSnapshot.docs.map((entry) => {
++      const data = entry.data();
++      return {
++        budgetMonth: typeof data.budgetMonth === 'string' ? data.budgetMonth : month,
++        category: typeof data.category === 'string' ? data.category : 'Uncategorized',
++        amount: Number(data.amount || 0),
++      };
++    });
+ 
+     try {
+       await runTransaction(db, async (transaction) => {
