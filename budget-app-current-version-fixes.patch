@@ -1,0 +1,538 @@
+diff --git a/app/analysis/page.tsx b/app/analysis/page.tsx
+index 38a5efe..206f66a 100644
+--- a/app/analysis/page.tsx
++++ b/app/analysis/page.tsx
+@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase';
+ import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
+ import Cookies from 'js-cookie';
+ import { CountUp } from 'use-count-up';
++import { downloadCsv } from '@/lib/csvExport';
+ 
+ interface CategoryBudget {
+   name: string;
+@@ -172,6 +173,30 @@ export default function AnalysisPage() {
+     balanceColor = 'text-orange-500';
+   }
+ 
++  function downloadMonthAnalysis() {
++    if (!month) return;
++    const rows: Array<Array<string | number>> = [
++      ['Monthly Analysis', formatMonth(month)],
++      ['Metric', 'Amount (KES)'],
++      ['Total budgeted', totalBudget],
++      ['Total debited', amountDebited],
++      ['Total spent (net)', amountSpent],
++      ['Total recovered', amountRecovered],
++      ['Total lost', amountLost],
++      ['Savings recorded', savedSoFar],
++      ['Remaining budget', remainingBudget],
++      [],
++      ['Budget Categories'],
++      ['Category', 'Planned Amount (KES)', 'Notes'],
++      ...plannedCategories.map((category) => [category.name, category.amount, category.notes]),
++      [],
++      ['Transactions'],
++      ['Category', 'Amount (KES)', 'Date', 'Note', 'Payment Method'],
++      ...transactions.map((tx) => [tx.category, Number(tx.amount || 0), tx.date || '', tx.note || '', tx.paidThrough || '']),
++    ];
++    downloadCsv(`budget-analysis-${month}.csv`, rows);
++  }
++
+   async function closeBudget(month: string) {
+     if (!user || closing) return;
+     const confirmSave = confirm(`Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`);
+@@ -196,7 +221,7 @@ export default function AnalysisPage() {
+       </h1>
+ 
+       {/* Month Selector + Balance */}
+-      <div className="w-full bg-white/60 backdrop-blur-xl rounded-xl shadow-sm mb-6 p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
++      <div className="relative z-30 w-full bg-white/60 backdrop-blur-xl rounded-xl shadow-sm mb-6 p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+ 
+         {/* Month Selector */}
+         <div className="flex items-center gap-3">
+@@ -219,7 +244,7 @@ export default function AnalysisPage() {
+                   Budget Closed
+                 </span>
+               ) : (
+-                <div className="relative inline-block text-left">
++                <div className="relative z-50 inline-block text-left">
+                   <details className="group">
+                     <summary className="list-none cursor-pointer px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-sm rounded-md flex items-center gap-1 shadow-sm">
+                       Actions
+@@ -228,7 +253,7 @@ export default function AnalysisPage() {
+                       </svg>
+                     </summary>
+ 
+-                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
++                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-[100]">
+ 
+                       {/* Close Budget */}
+                       <button
+@@ -240,12 +265,12 @@ export default function AnalysisPage() {
+ 
+                       <div className="border-t border-gray-200 my-1" />
+ 
+-                      {/* Download PDF */}
++                      {/* Download CSV */}
+                       <button
+-                        onClick={() => alert('PDF download feature coming soon!')}
++                        onClick={downloadMonthAnalysis}
+                         className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                       >
+-                        Download Analysis
++                        Download Analysis (CSV)
+                       </button>
+ 
+                     </div>
+diff --git a/app/monthly-analysis/page.tsx b/app/monthly-analysis/page.tsx
+index 611b195..ab92f60 100644
+--- a/app/monthly-analysis/page.tsx
++++ b/app/monthly-analysis/page.tsx
+@@ -7,6 +7,7 @@ import { collection, getDocs } from 'firebase/firestore';
+ import { db } from '@/lib/firebase';
+ import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
+ import { calculateMonthMetrics } from '@/lib/financeRules.mjs';
++import { downloadCsv } from '@/lib/csvExport';
+ 
+ interface Budget {
+   totalDebited: number;
+@@ -75,6 +76,32 @@ export default function MonthlySummaryPage() {
+     return calculateMonthMetrics(transactions, month, totalBudget).netSpend;
+   }
+ 
++  function downloadMonthAnalysis(month: string) {
++    const budget = budgets.find((item) => item.month === month);
++    const categories = budget?.categories || [];
++    const monthTransactions = transactions.filter((tx) => tx.budgetMonth === month);
++    const totalBudgeted = categories.reduce((sum, category) => sum + Number(category.amount || 0), 0);
++    const totalSpent = getTotalSpent(month);
++    const balance = totalBudgeted - totalSpent;
++    const rows: Array<Array<string | number>> = [
++      ['Monthly Analysis', formatMonth(month)],
++      ['Metric', 'Amount (KES)'],
++      ['Total debited', Number(budget?.totalDebited || 0)],
++      ['Total budgeted', totalBudgeted],
++      ['Total spent (net)', totalSpent],
++      ['Balance', balance],
++      [],
++      ['Budget Categories'],
++      ['Category', 'Planned Amount (KES)'],
++      ...categories.map((category) => [category.name, Number(category.amount || 0)]),
++      [],
++      ['Transactions'],
++      ['Category', 'Amount (KES)', 'Budget Month'],
++      ...monthTransactions.map((tx) => [tx.category, Number(tx.amount || 0), tx.budgetMonth]),
++    ];
++    downloadCsv(`monthly-analysis-${month}.csv`, rows);
++  }
++
+   async function closeBudget(month: string) {
+     if (!user || closingMonth) return;
+     const confirmSave = confirm(`Are you sure you want to close the budget for ${month}? This action cannot be undone.`);
+@@ -159,12 +186,12 @@ export default function MonthlySummaryPage() {
+ 
+                             <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
+ 
+-                              {/* Download PDF */}
++                              {/* Download CSV */}
+                               <button
+-                                onClick={() => alert('PDF download coming soon!')}
++                                onClick={() => downloadMonthAnalysis(b.month)}
+                                 className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                               >
+-                                Download Analysis
++                                Download Analysis (CSV)
+                               </button>
+                             </div>
+                           </details>
+diff --git a/components/ChamasTab.tsx b/components/ChamasTab.tsx
+index f0931ae..bf747eb 100644
+--- a/components/ChamasTab.tsx
++++ b/components/ChamasTab.tsx
+@@ -1,19 +1,15 @@
+ "use client";
+ 
+-import { useEffect, useState, useRef } from "react";
++import { useEffect, useState } from "react";
+ import {
+     collection,
+     onSnapshot,
+     query,
+     orderBy,
+-    addDoc,
+-    doc,
+ } from "firebase/firestore";
+ import { db } from "@/lib/firebase";
+ import { useAuth } from "@/lib/useAuth";
+ import ActionsAccordion from "./special_functions/ActionsAccordion";
+-import { allocateChamaFunds } from "@/lib/financeOperations";
+-import { repairLegacyChamaLedger } from "@/lib/repairLegacyChamaLedger";
+ 
+ /* =======================
+    Types
+@@ -65,16 +61,6 @@ export default function ChamaTab() {
+     const [ledger, setLedger] = useState<ChamaLedgerEntry[]>([]);
+     const [selectedChamaId, setSelectedChamaId] = useState<string | null>(null);
+ 
+-    const [newChamaName, setNewChamaName] = useState("");
+-    const [newChamaNote, setNewChamaNote] = useState("");
+-    const [creatingChama, setCreatingChama] = useState(false);
+-    const [repairingLegacy, setRepairingLegacy] = useState(false);
+-
+-
+-    const [amount, setAmount] = useState("");
+-    const [note, setNote] = useState("");
+-    const [loading, setLoading] = useState(false);
+-    const pendingAllocationId = useRef<string | null>(null);
+ 
+     /* =======================
+        Load Chamas
+@@ -137,71 +123,6 @@ export default function ChamaTab() {
+ 
+     const unallocatedBalance = balanceFor(null);
+ 
+-    /* =======================
+-       Allocation Handler
+-    ======================= */
+-
+-    const handleAllocate = async () => {
+-        if (!user) return;
+-        if (!selectedChamaId) {
+-            alert('Select a Chama.');
+-            return;
+-        }
+-        const value = Number(amount);
+-        if (!Number.isFinite(value) || value <= 0) {
+-            alert('Enter an amount greater than zero.');
+-            return;
+-        }
+-        setLoading(true);
+-        try {
+-            if (!pendingAllocationId.current) {
+-                pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
+-            }
+-            await allocateChamaFunds(user.uid, pendingAllocationId.current, selectedChamaId, value, note);
+-            pendingAllocationId.current = null;
+-            setAmount('');
+-            setNote('');
+-        } catch (error) {
+-            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
+-        } finally {
+-            setLoading(false);
+-        }
+-    };
+-
+-    /* =======================
+-       Create Chama
+-    ======================= */
+-
+-    const handleCreateChama = async () => {
+-        if (!user) return;
+-        if (!newChamaName.trim()) {
+-            alert("Chama name is required.");
+-            return;
+-        }
+-
+-        setCreatingChama(true);
+-
+-        try {
+-            await addDoc(
+-                collection(db, "users", user.uid, "chamas"),
+-                {
+-                    name: newChamaName.trim(),
+-                    status: "active",
+-                    createdAt: Date.now(),
+-                    note: newChamaNote.trim() || "",
+-                }
+-            );
+-
+-            setNewChamaName("");
+-            setNewChamaNote("");
+-        } catch {
+-            alert("Failed to create chama.");
+-        } finally {
+-            setCreatingChama(false);
+-        }
+-    };
+-
+-
+     /* =======================
+        Render
+     ======================= */
+@@ -211,29 +132,6 @@ export default function ChamaTab() {
+ 
+ 
+             <ActionsAccordion />
+-            <div className="flex justify-end">
+-                <button
+-                    type="button"
+-                    disabled={repairingLegacy || !user}
+-                    onClick={async () => {
+-                        if (!user || repairingLegacy) return;
+-                        const confirmed = confirm('This will remove only historical Chama ledger entries linked to existing transactions whose category is not “Chama Contribution”, then recalculate the unallocated Chama balance. Entries without a matching transaction will be left untouched. Continue?');
+-                        if (!confirmed) return;
+-                        setRepairingLegacy(true);
+-                        try {
+-                            const count = await repairLegacyChamaLedger(user.uid);
+-                            alert(count ? `Repaired ${count} incorrect historical Chama ledger entr${count === 1 ? 'y' : 'ies'}.` : 'No incorrectly categorized historical Chama ledger entries were found.');
+-                        } catch (error) {
+-                            alert(error instanceof Error ? error.message : 'Unable to repair historical Chama ledger entries.');
+-                        } finally {
+-                            setRepairingLegacy(false);
+-                        }
+-                    }}
+-                    className="text-sm border border-amber-600 text-amber-200 hover:bg-amber-900/30 rounded px-3 py-2 disabled:opacity-50"
+-                >
+-                    {repairingLegacy ? 'Checking ledger…' : 'Repair legacy Chama entries'}
+-                </button>
+-            </div>
+             {/* ===== Summary Cards ===== */}
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                 <div
+@@ -266,84 +164,6 @@ export default function ChamaTab() {
+                 ))}
+             </div>
+ 
+-            {/* ===== Create Chama ==== */}
+-            {/* <div className="p-4 bg-gray-900 rounded-lg space-y-3 border border-gray-800">
+-                <h3 className="font-semibold text-green-300">
+-                    Add New Chama
+-                </h3>
+-
+-                <input
+-                    type="text"
+-                    placeholder="Chama name (e.g. Office Chama)"
+-                    value={newChamaName}
+-                    onChange={(e) => setNewChamaName(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+-                />
+-
+-                <input
+-                    type="text"
+-                    placeholder="Note (optional)"
+-                    value={newChamaNote}
+-                    onChange={(e) => setNewChamaNote(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+-                />
+-
+-                <button
+-                    onClick={handleCreateChama}
+-                    disabled={creatingChama}
+-                    className="w-full bg-green-600 hover:bg-green-700 text-white p-2 rounded"
+-                >
+-                    {creatingChama ? "Creating..." : "Create Chama"}
+-                </button>
+-            </div> */}
+-
+-
+-            {/* ===== Allocation Form ===== */}
+-            {/* <div className="p-4 bg-gray-900 rounded-lg space-y-3">
+-                <h3 className="font-semibold text-blue-300">
+-                    Allocate from Unallocated
+-                </h3>
+-
+-                <select
+-                    value={selectedChamaId ?? ""}
+-                    onChange={(e) =>
+-                        setSelectedChamaId(e.target.value || null)
+-                    }
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+-                >
+-                    <option value="">Select Chama</option>
+-                    {chamas.map((c) => (
+-                        <option key={c.id} value={c.id}>
+-                            {c.name}
+-                        </option>
+-                    ))}
+-                </select>
+-
+-                <input
+-                    type="number"
+-                    placeholder="Amount"
+-                    value={amount}
+-                    onChange={(e) => setAmount(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+-                />
+-
+-                <input
+-                    type="text"
+-                    placeholder="Note (optional)"
+-                    value={note}
+-                    onChange={(e) => setNote(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+-                />
+-
+-                <button
+-                    onClick={handleAllocate}
+-                    disabled={loading}
+-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded"
+-                >
+-                    {loading ? "Processing..." : "Allocate"}
+-                </button>
+-            </div> */}
+-
+             {/* ===== Ledger ===== */}
+             <div className="p-4 bg-gray-900 rounded-lg">
+                 <h3 className="font-semibold mb-3">
+diff --git a/components/special_functions/AllocateChamaFunds.tsx b/components/special_functions/AllocateChamaFunds.tsx
+index 944e549..82eb1e2 100644
+--- a/components/special_functions/AllocateChamaFunds.tsx
++++ b/components/special_functions/AllocateChamaFunds.tsx
+@@ -41,6 +41,7 @@ export default function AllocateFunds() {
+     const [amount, setAmount] = useState("");
+     const [note, setNote] = useState("");
+     const [loading, setLoading] = useState(false);
++    const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+     const pendingAllocationId = useRef<string | null>(null);
+ 
+     /* =======================
+@@ -104,15 +105,16 @@ export default function AllocateFunds() {
+     const handleAllocate = async () => {
+         if (!user) return;
+         if (!selectedChamaId) {
+-            alert('Select a Chama.');
++            setFeedback({ type: "error", message: "Select a Chama before allocating funds." });
+             return;
+         }
+         const value = Number(amount);
+         if (!Number.isFinite(value) || value <= 0) {
+-            alert('Enter an amount greater than zero.');
++            setFeedback({ type: "error", message: "Enter an amount greater than zero." });
+             return;
+         }
+         setLoading(true);
++        setFeedback(null);
+         try {
+             if (!pendingAllocationId.current) {
+                 pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
+@@ -121,8 +123,10 @@ export default function AllocateFunds() {
+             pendingAllocationId.current = null;
+             setAmount('');
+             setNote('');
++            setSelectedChamaId(null);
++            setFeedback({ type: "success", message: "Funds allocated successfully." });
+         } catch (error) {
+-            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
++            setFeedback({ type: "error", message: error instanceof Error ? error.message : "Allocation failed. Retry to safely resume the same operation." });
+         } finally {
+             setLoading(false);
+         }
+@@ -139,7 +143,7 @@ export default function AllocateFunds() {
+                     onChange={(e) =>
+                         setSelectedChamaId(e.target.value || null)
+                     }
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
++                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 >
+                     <option value="">Select Chama</option>
+                     {chamas.map((c) => (
+@@ -154,7 +158,7 @@ export default function AllocateFunds() {
+                     placeholder="Amount"
+                     value={amount}
+                     onChange={(e) => setAmount(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
++                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+ 
+                 <input
+@@ -162,9 +166,15 @@ export default function AllocateFunds() {
+                     placeholder="Note (optional)"
+                     value={note}
+                     onChange={(e) => setNote(e.target.value)}
+-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
++                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                 />
+ 
++                {feedback && (
++                    <p role="status" aria-live="polite" className={`text-sm ${feedback.type === "success" ? "text-green-400" : "text-red-400"}`}>
++                        {feedback.message}
++                    </p>
++                )}
++
+                 <button
+                     onClick={handleAllocate}
+                     disabled={loading}
+diff --git a/components/special_functions/CreateChama.tsx b/components/special_functions/CreateChama.tsx
+index 5eea9bc..60574d1 100644
+--- a/components/special_functions/CreateChama.tsx
++++ b/components/special_functions/CreateChama.tsx
+@@ -36,15 +36,17 @@ export default function CreateChama() {
+     const [newChamaName, setNewChamaName] = useState("");
+     const [newChamaNote, setNewChamaNote] = useState("");
+     const [creatingChama, setCreatingChama] = useState(false);
++    const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+ 
+     const handleCreateChama = async () => {
+         if (!user) return;
+         if (!newChamaName.trim()) {
+-            alert("Chama name is required.");
++            setFeedback({ type: "error", message: "Chama name is required." });
+             return;
+         }
+ 
+         setCreatingChama(true);
++        setFeedback(null);
+ 
+         try {
+             await addDoc(
+@@ -59,8 +61,9 @@ export default function CreateChama() {
+ 
+             setNewChamaName("");
+             setNewChamaNote("");
+-        } catch {
+-            alert("Failed to create chama.");
++            setFeedback({ type: "success", message: "Chama created successfully." });
++        } catch (error) {
++            setFeedback({ type: "error", message: error instanceof Error ? error.message : "Failed to create Chama. Please try again." });
+         } finally {
+             setCreatingChama(false);
+         }
+@@ -77,7 +80,7 @@ export default function CreateChama() {
+                 placeholder="Chama name (e.g. Office Chama)"
+                 value={newChamaName}
+                 onChange={(e) => setNewChamaName(e.target.value)}
+-                className="w-full p-2 bg-gray-800 rounded border border-gray-700"
++                className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+             />
+ 
+             <input
+@@ -85,9 +88,15 @@ export default function CreateChama() {
+                 placeholder="Note (optional)"
+                 value={newChamaNote}
+                 onChange={(e) => setNewChamaNote(e.target.value)}
+-                className="w-full p-2 bg-gray-800 rounded border border-gray-700"
++                className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+             />
+ 
++            {feedback && (
++                <p role="status" aria-live="polite" className={`text-sm ${feedback.type === "success" ? "text-green-400" : "text-red-400"}`}>
++                    {feedback.message}
++                </p>
++            )}
++
+             <button
+                 onClick={handleCreateChama}
+                 disabled={creatingChama}
+diff --git a/lib/csvExport.ts b/lib/csvExport.ts
+new file mode 100644
+index 0000000..9e75c49
+--- /dev/null
++++ b/lib/csvExport.ts
+@@ -0,0 +1,17 @@
++/** Download tabular data as a UTF-8 CSV file that opens cleanly in spreadsheet apps. */
++export function downloadCsv(filename: string, rows: Array<Array<string | number | null | undefined>>) {
++  const escapeCell = (value: string | number | null | undefined) => {
++    const text = value == null ? '' : String(value);
++    return `"${text.replace(/"/g, '""')}"`;
++  };
++  const csv = '\uFEFF' + rows.map((row) => row.map(escapeCell).join(',')).join('\r\n');
++  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
++  const url = URL.createObjectURL(blob);
++  const link = document.createElement('a');
++  link.href = url;
++  link.download = filename;
++  document.body.appendChild(link);
++  link.click();
++  link.remove();
++  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
++}

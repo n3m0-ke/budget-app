@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase';
 import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
 import Cookies from 'js-cookie';
 import { CountUp } from 'use-count-up';
+import { downloadCsv } from '@/lib/csvExport';
 
 interface CategoryBudget {
   name: string;
@@ -172,6 +173,30 @@ export default function AnalysisPage() {
     balanceColor = 'text-orange-500';
   }
 
+  function downloadMonthAnalysis() {
+    if (!month) return;
+    const rows: Array<Array<string | number>> = [
+      ['Monthly Analysis', formatMonth(month)],
+      ['Metric', 'Amount (KES)'],
+      ['Total budgeted', totalBudget],
+      ['Total debited', amountDebited],
+      ['Total spent (net)', amountSpent],
+      ['Total recovered', amountRecovered],
+      ['Total lost', amountLost],
+      ['Savings recorded', savedSoFar],
+      ['Remaining budget', remainingBudget],
+      [],
+      ['Budget Categories'],
+      ['Category', 'Planned Amount (KES)', 'Notes'],
+      ...plannedCategories.map((category) => [category.name, category.amount, category.notes]),
+      [],
+      ['Transactions'],
+      ['Category', 'Amount (KES)', 'Date', 'Note', 'Payment Method'],
+      ...transactions.map((tx) => [tx.category, Number(tx.amount || 0), tx.date || '', tx.note || '', tx.paidThrough || '']),
+    ];
+    downloadCsv(`budget-analysis-${month}.csv`, rows);
+  }
+
   async function closeBudget(month: string) {
     if (!user || closing) return;
     const confirmSave = confirm(`Are you sure you want to close the budget for ${formatMonth(month)}? This action cannot be undone.`);
@@ -196,7 +221,7 @@ export default function AnalysisPage() {
       </h1>
 
       {/* Month Selector + Balance */}
-      <div className="w-full bg-white/60 backdrop-blur-xl rounded-xl shadow-sm mb-6 p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="relative z-30 w-full bg-white/60 backdrop-blur-xl rounded-xl shadow-sm mb-6 p-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 
         {/* Month Selector */}
         <div className="flex items-center gap-3">
@@ -219,7 +244,7 @@ export default function AnalysisPage() {
                   Budget Closed
                 </span>
               ) : (
-                <div className="relative inline-block text-left">
+                <div className="relative z-50 inline-block text-left">
                   <details className="group">
                     <summary className="list-none cursor-pointer px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-sm rounded-md flex items-center gap-1 shadow-sm">
                       Actions
@@ -228,7 +253,7 @@ export default function AnalysisPage() {
                       </svg>
                     </summary>
 
-                    <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50">
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-[100]">
 
                       {/* Close Budget */}
                       <button
@@ -240,12 +265,12 @@ export default function AnalysisPage() {
 
                       <div className="border-t border-gray-200 my-1" />
 
-                      {/* Download PDF */}
+                      {/* Download CSV */}
                       <button
-                        onClick={() => alert('PDF download feature coming soon!')}
+                        onClick={downloadMonthAnalysis}
                         className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
                       >
-                        Download Analysis
+                        Download Analysis (CSV)
                       </button>
 
                     </div>

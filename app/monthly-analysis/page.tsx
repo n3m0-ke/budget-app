@@ -7,6 +7,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { closeBudgetAndTransferRemainder } from '@/lib/financeOperations';
 import { calculateMonthMetrics } from '@/lib/financeRules.mjs';
+import { downloadCsv } from '@/lib/csvExport';
 
 interface Budget {
   totalDebited: number;
@@ -73,6 +74,32 @@ export default function MonthlySummaryPage() {
     const budget = budgets.find((item) => item.month === month);
     const totalBudget = (budget?.categories || []).reduce((sum, category) => sum + Number(category.amount || 0), 0);
     return calculateMonthMetrics(transactions, month, totalBudget).netSpend;
+  }
+
+  function downloadMonthAnalysis(month: string) {
+    const budget = budgets.find((item) => item.month === month);
+    const categories = budget?.categories || [];
+    const monthTransactions = transactions.filter((tx) => tx.budgetMonth === month);
+    const totalBudgeted = categories.reduce((sum, category) => sum + Number(category.amount || 0), 0);
+    const totalSpent = getTotalSpent(month);
+    const balance = totalBudgeted - totalSpent;
+    const rows: Array<Array<string | number>> = [
+      ['Monthly Analysis', formatMonth(month)],
+      ['Metric', 'Amount (KES)'],
+      ['Total debited', Number(budget?.totalDebited || 0)],
+      ['Total budgeted', totalBudgeted],
+      ['Total spent (net)', totalSpent],
+      ['Balance', balance],
+      [],
+      ['Budget Categories'],
+      ['Category', 'Planned Amount (KES)'],
+      ...categories.map((category) => [category.name, Number(category.amount || 0)]),
+      [],
+      ['Transactions'],
+      ['Category', 'Amount (KES)', 'Budget Month'],
+      ...monthTransactions.map((tx) => [tx.category, Number(tx.amount || 0), tx.budgetMonth]),
+    ];
+    downloadCsv(`monthly-analysis-${month}.csv`, rows);
   }
 
   async function closeBudget(month: string) {
@@ -159,12 +186,12 @@ export default function MonthlySummaryPage() {
 
                             <div className="absolute right-0 mt-2 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
 
-                              {/* Download PDF */}
+                              {/* Download CSV */}
                               <button
-                                onClick={() => alert('PDF download coming soon!')}
+                                onClick={() => downloadMonthAnalysis(b.month)}
                                 className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50"
                               >
-                                Download Analysis
+                                Download Analysis (CSV)
                               </button>
                             </div>
                           </details>

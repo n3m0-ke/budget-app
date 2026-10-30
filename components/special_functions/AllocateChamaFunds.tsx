@@ -41,6 +41,7 @@ export default function AllocateFunds() {
     const [amount, setAmount] = useState("");
     const [note, setNote] = useState("");
     const [loading, setLoading] = useState(false);
+    const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
     const pendingAllocationId = useRef<string | null>(null);
 
     /* =======================
@@ -104,15 +105,16 @@ export default function AllocateFunds() {
     const handleAllocate = async () => {
         if (!user) return;
         if (!selectedChamaId) {
-            alert('Select a Chama.');
+            setFeedback({ type: "error", message: "Select a Chama before allocating funds." });
             return;
         }
         const value = Number(amount);
         if (!Number.isFinite(value) || value <= 0) {
-            alert('Enter an amount greater than zero.');
+            setFeedback({ type: "error", message: "Enter an amount greater than zero." });
             return;
         }
         setLoading(true);
+        setFeedback(null);
         try {
             if (!pendingAllocationId.current) {
                 pendingAllocationId.current = doc(collection(db, 'users', user.uid, 'operations')).id;
@@ -121,8 +123,10 @@ export default function AllocateFunds() {
             pendingAllocationId.current = null;
             setAmount('');
             setNote('');
+            setSelectedChamaId(null);
+            setFeedback({ type: "success", message: "Funds allocated successfully." });
         } catch (error) {
-            alert(error instanceof Error ? error.message : 'Allocation failed. Retry to safely resume the same operation.');
+            setFeedback({ type: "error", message: error instanceof Error ? error.message : "Allocation failed. Retry to safely resume the same operation." });
         } finally {
             setLoading(false);
         }
@@ -139,7 +143,7 @@ export default function AllocateFunds() {
                     onChange={(e) =>
                         setSelectedChamaId(e.target.value || null)
                     }
-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                     <option value="">Select Chama</option>
                     {chamas.map((c) => (
@@ -154,7 +158,7 @@ export default function AllocateFunds() {
                     placeholder="Amount"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
 
                 <input
@@ -162,8 +166,14 @@ export default function AllocateFunds() {
                     placeholder="Note (optional)"
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+                    className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+
+                {feedback && (
+                    <p role="status" aria-live="polite" className={`text-sm ${feedback.type === "success" ? "text-green-400" : "text-red-400"}`}>
+                        {feedback.message}
+                    </p>
+                )}
 
                 <button
                     onClick={handleAllocate}

@@ -36,15 +36,17 @@ export default function CreateChama() {
     const [newChamaName, setNewChamaName] = useState("");
     const [newChamaNote, setNewChamaNote] = useState("");
     const [creatingChama, setCreatingChama] = useState(false);
+    const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
     const handleCreateChama = async () => {
         if (!user) return;
         if (!newChamaName.trim()) {
-            alert("Chama name is required.");
+            setFeedback({ type: "error", message: "Chama name is required." });
             return;
         }
 
         setCreatingChama(true);
+        setFeedback(null);
 
         try {
             await addDoc(
@@ -59,8 +61,9 @@ export default function CreateChama() {
 
             setNewChamaName("");
             setNewChamaNote("");
-        } catch {
-            alert("Failed to create chama.");
+            setFeedback({ type: "success", message: "Chama created successfully." });
+        } catch (error) {
+            setFeedback({ type: "error", message: error instanceof Error ? error.message : "Failed to create Chama. Please try again." });
         } finally {
             setCreatingChama(false);
         }
@@ -77,7 +80,7 @@ export default function CreateChama() {
                 placeholder="Chama name (e.g. Office Chama)"
                 value={newChamaName}
                 onChange={(e) => setNewChamaName(e.target.value)}
-                className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+                className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
 
             <input
@@ -85,8 +88,14 @@ export default function CreateChama() {
                 placeholder="Note (optional)"
                 value={newChamaNote}
                 onChange={(e) => setNewChamaNote(e.target.value)}
-                className="w-full p-2 bg-gray-800 rounded border border-gray-700"
+                className="w-full p-2 bg-gray-800 text-white placeholder-gray-400 rounded border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+
+            {feedback && (
+                <p role="status" aria-live="polite" className={`text-sm ${feedback.type === "success" ? "text-green-400" : "text-red-400"}`}>
+                    {feedback.message}
+                </p>
+            )}
 
             <button
                 onClick={handleCreateChama}
